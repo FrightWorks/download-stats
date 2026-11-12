@@ -1,0 +1,18 @@
+{
+  "_comment": "First matching rule wins (fnmatch, case-insensitive). 'type' is the rollup label; 'description' is shown per file. Put specific rules above general ones.",
+  "rules": [
+    {"pattern": "FrightWorks-win-Setup.exe", "type": "Windows installer", "description": "Windows installer (Velopack Setup.exe). What most Windows players download; installs and auto-updates."},
+    {"pattern": "FrightWorks-*.zip", "type": "Windows zip", "description": "Windows portable zip, x64. Unzip and run; no installer or auto-update."},
+    {"pattern": "FrightWorks.AppImage", "type": "Linux AppImage", "description": "Linux AppImage (beta). What Linux players download; auto-updates."},
+    {"pattern": "*-linux-delta.nupkg", "type": "Linux update package", "description": "Linux incremental update package, fetched by the installed AppImage updater."},
+    {"pattern": "*-linux-full.nupkg", "type": "Linux update package", "description": "Linux full update package, fetched by the installed AppImage updater."},
+    {"pattern": "*-delta.nupkg", "type": "Windows update package", "description": "Windows incremental update package, fetched by the installed launcher updater."},
+    {"pattern": "*-full.nupkg", "type": "Windows update package", "description": "Windows full update package, fetched by the installed launcher updater."},
+    {"pattern": "RELEASES-linux", "type": "Linux update feed", "description": "Linux update feed metadata. Downloads are update checks, not players."},
+    {"pattern": "releases.linux.json", "type": "Linux update feed", "description": "Linux update feed metadata. Downloads are update checks, not players."},
+    {"pattern": "assets.linux.json", "type": "Linux update feed", "description": "Linux update feed metadata. Downloads are update checks, not players."},
+    {"pattern": "RELEASES", "type": "Windows update feed", "description": "Windows update feed metadata. Downloads are update checks, not players."},
+    {"pattern": "releases.win.json", "type": "Windows update feed", "description": "Windows update feed metadata. Downloads are update checks, not players."},
+    {"pattern": "assets.win.json", "type": "Windows update feed", "description": "Windows update feed metadata. Downloads are update checks, not players."}
+  ]
+}
