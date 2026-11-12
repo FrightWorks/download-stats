@@ -22,8 +22,9 @@ Regenerated on every run:
 - `STATS.md` (committed): the stats as markdown tables, which GitHub renders in the repo view: grand total, rollup
   by file type, and per version (newest first, with release date) each file's description, size and downloads,
   plus a "last updated" UTC time.
-- `output/index.html` (git-ignored, published to GitHub Pages by the workflow): the same as a self-contained page
-  (no scripts, no external requests). Pages hosts it, so it isn't committed.
+- `output/index.html` (git-ignored, published to GitHub Pages by the workflow): a friendly self-contained page
+  (header with last-updated time in Central time, stat tiles, downloads-per-version bars split into players vs update traffic,
+  collapsible per-version file details, file-type rollup, and a total-downloads trend from `data/`; no scripts, no external requests). Pages hosts it, so it isn't committed.
 - `data/<UTC timestamp>.json` (committed): raw per-asset counts from each run. One file per run (the name includes
   the time, so twice a day never collides). GitHub only reports cumulative counts, so these are the history for trends later.
 
