@@ -8,13 +8,15 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
-  group: stats
+  group: pages
   cancel-in-progress: false
 
 jobs:
-  stats:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,14 +29,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python dashboard.py
-      - name: Commit changes
+      - name: Commit history and STATS.md
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add STATS.md output data
+          git add STATS.md data
           if git diff --cached --quiet; then
             echo "Nothing changed."
           else
             git commit -m "Update download stats"
             git push
           fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: output
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
