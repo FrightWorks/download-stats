@@ -61,6 +61,15 @@ class Tests(unittest.TestCase):
                 snap = json.load(f)
             self.assertEqual(snap["releases"][1]["assets"][0]["download_count"], 5)
 
+    def test_markdown(self):
+        md = dashboard.render_markdown(dashboard.summarize(FIXTURE, RULES), "o/r", "2026-03-04 05:06 UTC")
+        self.assertIn("**32** total downloads", md)
+        self.assertIn("Last updated 2026-03-04 05:06 UTC", md)
+        self.assertIn("| Windows zip | 2 | 15 |", md)
+        self.assertIn("### v1.1", md)
+        self.assertLess(md.index("### v1.1"), md.index("### v1.0"))
+        self.assertIn("| mystery.bin | unclassified | 100 B | 3 |", md)
+        self.assertNotIn("\r", md)
 
 if __name__ == "__main__":
     unittest.main()
