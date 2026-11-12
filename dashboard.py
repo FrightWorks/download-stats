@@ -122,6 +122,29 @@ Update-feed files count updater checks, not players. Generated {e(generated)}.</
     return "\n".join(out)
 
 
+def render_markdown(summary, repo, generated):
+    """The same content as the HTML page, as GitHub-flavoured markdown."""
+    def cell(s):
+        return str(s).replace("|", "\\|")
+    out = [f"# Download stats: {repo}", "",
+           f"**{summary['total']:,}** total downloads, all files and versions.", "",
+           f"Last updated {generated}. Update-feed files count updater checks, not players.", "",
+           "## By file type, all versions", "",
+           "| Type | Files | Downloads |", "|---|---:|---:|"]
+    for t in summary["types"]:
+        out.append(f"| {cell(t['type'])} | {t['files']} | {t['downloads']:,} |")
+    out += ["", "## By version", ""]
+    for v in summary["versions"]:
+        flag = " (draft)" if v["draft"] else " (pre-release)" if v["prerelease"] else ""
+        out += [f"### {v['tag']}{flag}", "", f"{v['date']} · {v['downloads']:,} downloads", "",
+                "| File | What it is | Size | Downloads |", "|---|---|---:|---:|"]
+        for f in v["files"]:
+            out.append(f"| {cell(f['name'])} | {cell(f['description'])} | "
+                       f"{human_size(f['size'])} | {f['downloads']:,} |")
+        out.append("")
+    return "\n".join(out)
+
+
 def save_snapshot(releases, repo, data_dir, now):
     """Write the raw per-asset counts to data/<UTC timestamp>.json."""
     snap = {"repo": repo, "taken_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -141,6 +164,7 @@ def main():
     ap.add_argument("--repo", default=DEFAULT_REPO)
     ap.add_argument("--map", default=os.path.join(HERE, "asset-types.json"))
     ap.add_argument("--out", default=os.path.join(HERE, "output", "index.html"))
+    ap.add_argument("--md", default=os.path.join(HERE, "STATS.md"))
     ap.add_argument("--data-dir", default=os.path.join(HERE, "data"))
     args = ap.parse_args()
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -150,7 +174,9 @@ def main():
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(render(summary, args.repo, now.strftime("%Y-%m-%d %H:%M UTC")))
-    print(f"snapshot: {snap}\npage: {args.out}\ntotal downloads: {summary['total']}")
+    with open(args.md, "w", encoding="utf-8", newline="\n") as f:
+        f.write(render_markdown(summary, args.repo, now.strftime("%Y-%m-%d %H:%M UTC")))
+    print(f"snapshot: {snap}\npage: {args.out}\nmarkdown: {args.md}\ntotal downloads: {summary['total']}")
     for t in summary["types"]:
         print(f"  {t['type']}: {t['downloads']}")
     unk = sorted({f["name"] for v in summary["versions"] for f in v["files"] if f["type"] == UNCLASSIFIED})
