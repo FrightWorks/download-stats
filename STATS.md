@@ -2,7 +2,7 @@
 
 **889** total downloads, all files and versions.
 
-Last updated 2026-11-12 00:28 UTC. Update-feed files count updater checks, not players.
+Last updated 2026-11-12 00:32 UTC. Update-feed files count updater checks, not players.
 
 ## By file type, all versions
 
