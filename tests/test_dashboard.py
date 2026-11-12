@@ -81,7 +81,7 @@ class Tests(unittest.TestCase):
         now = datetime.datetime(2026, 11, 12, 0, 32, tzinfo=datetime.timezone.utc)
         s = dashboard.summarize(FIXTURE, RULES)
         page = dashboard.render(s, "o/r", now)
-        for text in ("v1.1", "Windows zip", "mystery.bin", "unclassified", ">32<", ">26<",
+        for text in ("v1.1", "Windows zip", "mystery.<wbr>bin", "unclassified", ">32<", ">26<",
                      "6:32 PM CST", "github.com/o/r/releases", "trend chart appears after a few runs",
                      "<details open>", "prefers-color-scheme:dark"):
             self.assertIn(text, page)
@@ -100,6 +100,17 @@ class Tests(unittest.TestCase):
             with open(path) as f:
                 snap = json.load(f)
             self.assertEqual(snap["releases"][1]["assets"][0]["download_count"], 5)
+
+    def test_sizes_and_names(self):
+        self.assertEqual(dashboard.mb(0), "0 KB")
+        self.assertEqual(dashboard.mb(209), "0 KB")
+        self.assertEqual(dashboard.mb(4096), "4 KB")
+        self.assertEqual(dashboard.mb(1048575), "1,024 KB")
+        self.assertEqual(dashboard.mb(1048576), "1.0 MB")
+        self.assertEqual(dashboard.mb(688655610), "656.8 MB")
+        self.assertEqual(dashboard.break_name("FrightWorks-win-Setup.exe"),
+                         "FrightWorks-<wbr>win-<wbr>Setup.<wbr>exe")
+        self.assertEqual(dashboard.break_name("a<b>.zip"), "a&lt;b&gt;.<wbr>zip")
 
     def test_markdown(self):
         md = dashboard.render_markdown(dashboard.summarize(FIXTURE, RULES), "o/r", "2026-03-04 05:06 UTC")

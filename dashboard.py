@@ -8,6 +8,7 @@ import datetime
 import fnmatch
 import html
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -144,7 +145,15 @@ def load_trend(data_dir):
 
 
 def mb(n):
+    """Size for display: KB below 1 MB, else MB with one decimal."""
+    if n < 1048576:
+        return f"{round(n / 1024):,} KB"
     return f"{n / 1048576:,.1f} MB"
+
+
+def break_name(name):
+    """Escape a file name and allow line breaks only after '-' and '.'."""
+    return "<wbr>".join(html.escape(p) for p in re.split(r"(?<=[-.])", name))
 
 
 CSS = """
@@ -175,7 +184,7 @@ summary{cursor:pointer;font-weight:600;display:flex;flex-wrap:wrap;gap:.25rem .8
 summary small{font-weight:400;color:var(--ink2)}
 .tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;margin:.5rem 0;font-size:.9rem}
 th,td{text-align:left;padding:.4rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
-th{color:var(--ink2);font-weight:600;font-size:.8rem}.desc{color:var(--ink2);min-width:12rem}.fn{overflow-wrap:anywhere;min-width:9rem}
+th{color:var(--ink2);font-weight:600;font-size:.8rem}.desc{color:var(--ink2);min-width:12rem}.fn{min-width:9rem}td.n{white-space:nowrap}
 .share{display:block;width:5rem;height:.5rem;margin-top:.45rem;background:var(--track);border-radius:4px;overflow:hidden}
 .share i{display:block;height:100%;background:var(--s1)}
 .trend{width:100%;height:auto}.trend text{fill:var(--muted);font-size:11px}
@@ -265,7 +274,7 @@ def render(summary, repo, generated, trend=None):
                    '<th>Share</th></tr>')
         for f in v["files"]:
             share = f["downloads"] / vt * 100
-            out.append(f'<tr><td class="fn">{e(f["name"])}</td><td class="desc">{e(f["description"])}</td>'
+            out.append(f'<tr><td class="fn">{break_name(f["name"])}</td><td class="desc">{e(f["description"])}</td>'
                        f'<td class="n">{mb(f["size"])}</td><td class="n">{f["downloads"]:,}</td>'
                        f'<td><span class="share" title="{share:.0f}% of this version">'
                        f'<i style="width:{share:.1f}%"></i></span></td></tr>')
