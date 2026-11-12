@@ -48,11 +48,51 @@ class Tests(unittest.TestCase):
         self.assertEqual(sum(types.values()), s["total"])
         self.assertEqual(s["versions"][0]["files"][0]["name"], "FrightWorks-win-Setup.exe")
 
+    def test_split_downloads(self):
+        s = dashboard.summarize(FIXTURE, RULES)
+        self.assertEqual(dashboard.split_downloads(s["versions"][0]["files"]), (16, 3, 3))
+        self.assertEqual(dashboard.split_downloads(s["versions"][1]["files"]), (10, 0, 0))
+
+    def test_central_time(self):
+        utc = datetime.timezone.utc
+        self.assertEqual(dashboard.format_central(datetime.datetime(2026, 11, 12, 0, 32, tzinfo=utc)),
+                         "Nov 11, 2026, 6:32 PM CST")
+        self.assertEqual(dashboard.format_central(datetime.datetime(2026, 7, 1, 17, 5, tzinfo=utc)),
+                         "Jul 1, 2026, 12:05 PM CDT")
+        # DST ends Sun 2026-11-01 at 07:00 UTC
+        self.assertEqual(dashboard.central_time(datetime.datetime(2026, 11, 1, 6, 59, tzinfo=utc))[1], "CDT")
+        self.assertEqual(dashboard.central_time(datetime.datetime(2026, 11, 1, 7, 0, tzinfo=utc))[1], "CST")
+        # DST starts Sun 2026-03-08 at 08:00 UTC
+        self.assertEqual(dashboard.central_time(datetime.datetime(2026, 3, 8, 8, 0, tzinfo=utc))[1], "CDT")
+
+    def test_load_trend(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(dashboard.load_trend(d), [])
+            for stamp, n in (("2026-03-05T050607Z", 9), ("2026-03-04T050607Z", 4)):
+                now = datetime.datetime.strptime(stamp, "%Y-%m-%dT%H%M%SZ").replace(tzinfo=datetime.timezone.utc)
+                rels = [{"tag_name": "v1", "assets": [asset("a.zip", n), asset("b", 1)]}]
+                dashboard.save_snapshot(rels, "o/r", d, now)
+            with open(os.path.join(d, "junk.json"), "w") as f:
+                f.write("{")
+            self.assertEqual(dashboard.load_trend(d),
+                             [("2026-03-04T05:06:07Z", 5), ("2026-03-05T05:06:07Z", 10)])
+
     def test_render_and_snapshot(self):
-        page = dashboard.render(dashboard.summarize(FIXTURE, RULES), "o/r", "now")
-        for text in ("v1.1", "Windows zip", "mystery.bin", "unclassified", '<div class="big">32</div>'):
+        now = datetime.datetime(2026, 11, 12, 0, 32, tzinfo=datetime.timezone.utc)
+        s = dashboard.summarize(FIXTURE, RULES)
+        page = dashboard.render(s, "o/r", now)
+        for text in ("v1.1", "Windows zip", "mystery.bin", "unclassified", ">32<", ">26<",
+                     "6:32 PM CST", "github.com/o/r/releases", "trend chart appears after a few runs",
+                     "<details open>", "prefers-color-scheme:dark"):
             self.assertIn(text, page)
-        self.assertNotIn("http", page)
+        self.assertEqual(page.count("<details open>"), 1)
+        self.assertNotIn("<script", page)
+        self.assertNotIn("<polyline", page)
+        for bad in ("src=", "@import", "url("):
+            self.assertNotIn(bad, page)
+        page = dashboard.render(s, "o/r", now, [("2026-11-11T00:00:00Z", 20), ("2026-11-12T00:00:00Z", 32)])
+        self.assertIn("<polyline", page)
+        self.assertNotIn("appears after a few runs", page)
         with tempfile.TemporaryDirectory() as d:
             now = datetime.datetime(2026, 3, 4, 5, 6, 7, tzinfo=datetime.timezone.utc)
             path = dashboard.save_snapshot(FIXTURE, "o/r", d, now)
