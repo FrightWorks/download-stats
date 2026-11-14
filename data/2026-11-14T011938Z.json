@@ -1,0 +1,262 @@
+{
+ "repo": "FrightWorks/FrightWorks-no100f",
+ "taken_at": "2026-11-14T01:19:38Z",
+ "releases": [
+  {
+   "tag": "v1.1.3",
+   "published_at": "2026-11-10T01:20:03Z",
+   "assets": [
+    {
+     "name": "assets.linux.json",
+     "size": 209,
+     "download_count": 4
+    },
+    {
+     "name": "assets.win.json",
+     "size": 203,
+     "download_count": 4
+    },
+    {
+     "name": "FrightWorks-1.1.2-full.nupkg",
+     "size": 688655610,
+     "download_count": 3
+    },
+    {
+     "name": "FrightWorks-1.1.2-linux-full.nupkg",
+     "size": 677281237,
+     "download_count": 3
+    },
+    {
+     "name": "FrightWorks-1.1.3-delta.nupkg",
+     "size": 1224535,
+     "download_count": 9
+    },
+    {
+     "name": "FrightWorks-1.1.3-full.nupkg",
+     "size": 688655641,
+     "download_count": 7
+    },
+    {
+     "name": "FrightWorks-1.1.3-linux-delta.nupkg",
+     "size": 21112522,
+     "download_count": 4
+    },
+    {
+     "name": "FrightWorks-1.1.3-linux-full.nupkg",
+     "size": 677473551,
+     "download_count": 5
+    },
+    {
+     "name": "FrightWorks-1.1.3.zip",
+     "size": 685404545,
+     "download_count": 122
+    },
+    {
+     "name": "FrightWorks-win-Setup.exe",
+     "size": 696248601,
+     "download_count": 71
+    },
+    {
+     "name": "FrightWorks.AppImage",
+     "size": 678062584,
+     "download_count": 30
+    },
+    {
+     "name": "RELEASES",
+     "size": 162,
+     "download_count": 12
+    },
+    {
+     "name": "RELEASES-linux",
+     "size": 174,
+     "download_count": 10
+    },
+    {
+     "name": "releases.linux.json",
+     "size": 766,
+     "download_count": 28
+    },
+    {
+     "name": "releases.win.json",
+     "size": 747,
+     "download_count": 58
+    }
+   ]
+  },
+  {
+   "tag": "v1.1.2",
+   "published_at": "2026-11-09T23:09:25Z",
+   "assets": [
+    {
+     "name": "assets.linux.json",
+     "size": 135,
+     "download_count": 3
+    },
+    {
+     "name": "assets.win.json",
+     "size": 203,
+     "download_count": 3
+    },
+    {
+     "name": "FrightWorks-1.1.1-full.nupkg",
+     "size": 702298106,
+     "download_count": 2
+    },
+    {
+     "name": "FrightWorks-1.1.2-delta.nupkg",
+     "size": 47590205,
+     "download_count": 5
+    },
+    {
+     "name": "FrightWorks-1.1.2-full.nupkg",
+     "size": 688655610,
+     "download_count": 4
+    },
+    {
+     "name": "FrightWorks-1.1.2-linux-full.nupkg",
+     "size": 677281237,
+     "download_count": 5
+    },
+    {
+     "name": "FrightWorks-1.1.2.zip",
+     "size": 683238769,
+     "download_count": 25
+    },
+    {
+     "name": "FrightWorks-win-Setup.exe",
+     "size": 696248570,
+     "download_count": 14
+    },
+    {
+     "name": "FrightWorks.AppImage",
+     "size": 677870072,
+     "download_count": 11
+    },
+    {
+     "name": "RELEASES",
+     "size": 162,
+     "download_count": 8
+    },
+    {
+     "name": "RELEASES-linux",
+     "size": 88,
+     "download_count": 8
+    },
+    {
+     "name": "releases.linux.json",
+     "size": 263,
+     "download_count": 31
+    },
+    {
+     "name": "releases.win.json",
+     "size": 748,
+     "download_count": 62
+    }
+   ]
+  },
+  {
+   "tag": "v1.1.1",
+   "published_at": "2026-11-04T00:19:47Z",
+   "assets": [
+    {
+     "name": "assets.win.json",
+     "size": 203,
+     "download_count": 4
+    },
+    {
+     "name": "FrightWorks-1.1.0-full.nupkg",
+     "size": 702208702,
+     "download_count": 2
+    },
+    {
+     "name": "FrightWorks-1.1.1-delta.nupkg",
+     "size": 3219266,
+     "download_count": 6
+    },
+    {
+     "name": "FrightWorks-1.1.1-full.nupkg",
+     "size": 702298106,
+     "download_count": 5
+    },
+    {
+     "name": "FrightWorks-1.1.1.zip",
+     "size": 699097011,
+     "download_count": 164
+    },
+    {
+     "name": "FrightWorks-win-Setup.exe",
+     "size": 709891066,
+     "download_count": 69
+    },
+    {
+     "name": "RELEASES",
+     "size": 162,
+     "download_count": 11
+    },
+    {
+     "name": "releases.win.json",
+     "size": 747,
+     "download_count": 121
+    }
+   ]
+  },
+  {
+   "tag": "v1.1.0",
+   "published_at": "2026-11-03T07:11:49Z",
+   "assets": [
+    {
+     "name": "assets.win.json",
+     "size": 135,
+     "download_count": 3
+    },
+    {
+     "name": "FrightWorks-1.1.0-full.nupkg",
+     "size": 702208702,
+     "download_count": 1
+    },
+    {
+     "name": "FrightWorks-1.1.0.zip",
+     "size": 699021870,
+     "download_count": 50
+    },
+    {
+     "name": "FrightWorks-win-Setup.exe",
+     "size": 709801662,
+     "download_count": 19
+    },
+    {
+     "name": "RELEASES",
+     "size": 82,
+     "download_count": 11
+    },
+    {
+     "name": "releases.win.json",
+     "size": 257,
+     "download_count": 125
+    }
+   ]
+  },
+  {
+   "tag": "v1.0.4",
+   "published_at": "2026-11-03T02:04:31Z",
+   "assets": [
+    {
+     "name": "FrightWorks-1.0.4.zip",
+     "size": 698871027,
+     "download_count": 19
+    }
+   ]
+  },
+  {
+   "tag": "v1.0.3",
+   "published_at": "2026-11-01T05:13:12Z",
+   "assets": [
+    {
+     "name": "FrightWorks-1.0.3.zip",
+     "size": 697164523,
+     "download_count": 85
+    }
+   ]
+  }
+ ]
+}
