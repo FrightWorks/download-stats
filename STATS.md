@@ -1,18 +1,18 @@
 # Download stats: FrightWorks/FrightWorks-no100f
 
-**1,761** total downloads, all files and versions.
+**1,787** total downloads, all files and versions.
 
-Last updated 2026-11-18 02:45 UTC. Update-feed files count updater checks, not players.
+Last updated 2026-11-18 17:51 UTC. Update-feed files count updater checks, not players.
 
 ## By file type, all versions
 
 | Type | Files | Downloads |
 |---|---:|---:|
-| Windows update feed | 12 | 719 |
-| Windows zip | 6 | 539 |
-| Windows installer | 4 | 243 |
-| Linux update feed | 6 | 122 |
-| Linux AppImage | 2 | 58 |
+| Windows update feed | 12 | 735 |
+| Windows zip | 6 | 540 |
+| Windows installer | 4 | 249 |
+| Linux update feed | 6 | 124 |
+| Linux AppImage | 2 | 59 |
 | Windows update package | 10 | 56 |
 | Linux update package | 4 | 24 |
 
@@ -20,15 +20,15 @@ Last updated 2026-11-18 02:45 UTC. Update-feed files count updater checks, not p
 
 ### v1.1.3
 
-2026-11-10 · 614 downloads
+2026-11-10 · 623 downloads
 
 | File | What it is | Size | Downloads |
 |---|---|---:|---:|
 | FrightWorks-1.1.3.zip | Windows portable zip, x64. Unzip and run; no installer or auto-update. | 653.7 MB | 190 |
-| releases.win.json | Windows update feed metadata. Downloads are update checks, not players. | 747 B | 132 |
-| FrightWorks-win-Setup.exe | Windows installer (Velopack Setup.exe). What most Windows players download; installs and auto-updates. | 664.0 MB | 125 |
-| FrightWorks.AppImage | Linux AppImage (beta). What Linux players download; auto-updates. | 646.7 MB | 46 |
-| releases.linux.json | Linux update feed metadata. Downloads are update checks, not players. | 766 B | 45 |
+| releases.win.json | Windows update feed metadata. Downloads are update checks, not players. | 747 B | 136 |
+| FrightWorks-win-Setup.exe | Windows installer (Velopack Setup.exe). What most Windows players download; installs and auto-updates. | 664.0 MB | 128 |
+| FrightWorks.AppImage | Linux AppImage (beta). What Linux players download; auto-updates. | 646.7 MB | 47 |
+| releases.linux.json | Linux update feed metadata. Downloads are update checks, not players. | 766 B | 46 |
 | RELEASES | Windows update feed metadata. Downloads are update checks, not players. | 162 B | 14 |
 | RELEASES-linux | Linux update feed metadata. Downloads are update checks, not players. | 174 B | 12 |
 | FrightWorks-1.1.3-delta.nupkg | Windows incremental update package, fetched by the installed launcher updater. | 1.2 MB | 10 |
@@ -42,14 +42,14 @@ Last updated 2026-11-18 02:45 UTC. Update-feed files count updater checks, not p
 
 ### v1.1.2
 
-2026-11-09 · 286 downloads
+2026-11-09 · 292 downloads
 
 | File | What it is | Size | Downloads |
 |---|---|---:|---:|
-| releases.win.json | Windows update feed metadata. Downloads are update checks, not players. | 748 B | 135 |
-| releases.linux.json | Linux update feed metadata. Downloads are update checks, not players. | 263 B | 47 |
+| releases.win.json | Windows update feed metadata. Downloads are update checks, not players. | 748 B | 139 |
+| releases.linux.json | Linux update feed metadata. Downloads are update checks, not players. | 263 B | 48 |
 | FrightWorks-1.1.2.zip | Windows portable zip, x64. Unzip and run; no installer or auto-update. | 651.6 MB | 26 |
-| FrightWorks-win-Setup.exe | Windows installer (Velopack Setup.exe). What most Windows players download; installs and auto-updates. | 664.0 MB | 19 |
+| FrightWorks-win-Setup.exe | Windows installer (Velopack Setup.exe). What most Windows players download; installs and auto-updates. | 664.0 MB | 20 |
 | FrightWorks.AppImage | Linux AppImage (beta). What Linux players download; auto-updates. | 646.5 MB | 12 |
 | RELEASES | Windows update feed metadata. Downloads are update checks, not players. | 162 B | 9 |
 | RELEASES-linux | Linux update feed metadata. Downloads are update checks, not players. | 88 B | 9 |
@@ -62,13 +62,13 @@ Last updated 2026-11-18 02:45 UTC. Update-feed files count updater checks, not p
 
 ### v1.1.1
 
-2026-11-04 · 469 downloads
+2026-11-04 · 474 downloads
 
 | File | What it is | Size | Downloads |
 |---|---|---:|---:|
-| releases.win.json | Windows update feed metadata. Downloads are update checks, not players. | 747 B | 193 |
+| releases.win.json | Windows update feed metadata. Downloads are update checks, not players. | 747 B | 197 |
 | FrightWorks-1.1.1.zip | Windows portable zip, x64. Unzip and run; no installer or auto-update. | 666.7 MB | 165 |
-| FrightWorks-win-Setup.exe | Windows installer (Velopack Setup.exe). What most Windows players download; installs and auto-updates. | 677.0 MB | 76 |
+| FrightWorks-win-Setup.exe | Windows installer (Velopack Setup.exe). What most Windows players download; installs and auto-updates. | 677.0 MB | 77 |
 | RELEASES | Windows update feed metadata. Downloads are update checks, not players. | 162 B | 12 |
 | FrightWorks-1.1.1-delta.nupkg | Windows incremental update package, fetched by the installed launcher updater. | 3.1 MB | 8 |
 | FrightWorks-1.1.1-full.nupkg | Windows full update package, fetched by the installed launcher updater. | 669.8 MB | 6 |
@@ -77,24 +77,24 @@ Last updated 2026-11-18 02:45 UTC. Update-feed files count updater checks, not p
 
 ### v1.1.0
 
-2026-11-03 · 284 downloads
+2026-11-03 · 289 downloads
 
 | File | What it is | Size | Downloads |
 |---|---|---:|---:|
-| releases.win.json | Windows update feed metadata. Downloads are update checks, not players. | 257 B | 196 |
+| releases.win.json | Windows update feed metadata. Downloads are update checks, not players. | 257 B | 200 |
 | FrightWorks-1.1.0.zip | Windows portable zip, x64. Unzip and run; no installer or auto-update. | 666.6 MB | 50 |
-| FrightWorks-win-Setup.exe | Windows installer (Velopack Setup.exe). What most Windows players download; installs and auto-updates. | 676.9 MB | 23 |
+| FrightWorks-win-Setup.exe | Windows installer (Velopack Setup.exe). What most Windows players download; installs and auto-updates. | 676.9 MB | 24 |
 | RELEASES | Windows update feed metadata. Downloads are update checks, not players. | 82 B | 11 |
 | assets.win.json | Windows update feed metadata. Downloads are update checks, not players. | 135 B | 3 |
 | FrightWorks-1.1.0-full.nupkg | Windows full update package, fetched by the installed launcher updater. | 669.7 MB | 1 |
 
 ### v1.0.4
 
-2026-11-03 · 23 downloads
+2026-11-03 · 24 downloads
 
 | File | What it is | Size | Downloads |
 |---|---|---:|---:|
-| FrightWorks-1.0.4.zip | Windows portable zip, x64. Unzip and run; no installer or auto-update. | 666.5 MB | 23 |
+| FrightWorks-1.0.4.zip | Windows portable zip, x64. Unzip and run; no installer or auto-update. | 666.5 MB | 24 |
 
 ### v1.0.3
 
