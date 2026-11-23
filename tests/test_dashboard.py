@@ -118,7 +118,7 @@ class Tests(unittest.TestCase):
         now = datetime.datetime(2026, 11, 12, 0, 32, tzinfo=datetime.timezone.utc)
         s = dashboard.summarize(FIXTURE, RULES)
         page = dashboard.render(s, "o/r", now)
-        for text in ("Latest version", "Windows downloads", "Linux downloads", "Installer 7", "mystery.<wbr>bin",
+        for text in ("Latest version", "Windows downloads", "Linux downloads", "All versions: <b>26</b> downloads (Windows 22 &middot; Linux 4)", "Installer 7", "mystery.<wbr>bin",
                      "6:32 PM CST", "github.com/o/r/releases", "chart appears once snapshots span",
                      "prefers-color-scheme:dark"):
             self.assertIn(text, page)

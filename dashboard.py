@@ -349,6 +349,16 @@ def render_files(v):
     return "".join(out)
 
 
+def all_versions_total(versions):
+    """(total, {platform: downloads}) of installer/zip/AppImage downloads over every published version."""
+    per = {p: 0 for p in PLATFORMS}
+    for v in versions:
+        if not v["draft"]:
+            for p, st in platform_stats(v).items():
+                per[p] += st["downloads"]
+    return sum(per.values()), per
+
+
 def render(summary, repo, generated, history=None):
     """The self-contained page. `generated` is an aware UTC datetime (or a plain string)."""
     e = html.escape
@@ -356,6 +366,7 @@ def render(summary, repo, generated, history=None):
     shown = shown_versions(summary["versions"])
     cur = shown[0] if shown else None
     history = history or []
+    all_total, all_per = all_versions_total(summary["versions"])
     repo_url = f"https://github.com/{repo}/releases"
     tile = lambda k, v, d="": (f'<div class="tile"><div class="k">{k}</div><div class="v">{v}</div>'
                                f'<div class="d">{d}</div></div>')
@@ -363,7 +374,8 @@ def render(summary, repo, generated, history=None):
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>FrightWorks PC port downloads</title><style>{CSS}</style></head><body><main>
 <header><h1>FrightWorks PC port downloads</h1>
-<p class="sub">Last updated {e(updated)} &middot; <a href="{e(repo_url)}">See the releases on GitHub</a></p></header>"""]
+<p class="sub">Last updated {e(updated)} &middot; <a href="{e(repo_url)}">See the releases on GitHub</a></p>
+<p class="sub total">All versions: <b>{all_total:,}</b> downloads ({" &middot; ".join(f"{p} {n:,}" for p, n in all_per.items())})</p></header>"""]
     if cur:
         stats = platform_stats(cur)
         out.append('<div class="tiles">')
