@@ -19,12 +19,14 @@ Options: `--repo OWNER/NAME`, `--out PATH`, `--map PATH`, `--data-dir PATH`.
 
 Regenerated on every run:
 
-- `STATS.md` (committed): the stats as markdown tables, which GitHub renders in the repo view: grand total, rollup
-  by file type, and per version (newest first, with release date) each file's description, size and downloads,
-  plus a "last updated" UTC time.
+- `STATS.md` (committed): a table of the last 5 published versions (Windows and Linux downloads, update files and
+  update checks each), plus the current version's files with description, size and downloads, and a "last updated" UTC time.
 - `output/index.html` (git-ignored, published to GitHub Pages by the workflow): a friendly self-contained page
-  (header with last-updated time in Central time, stat tiles, downloads-per-version bars split into players vs update traffic,
-  collapsible per-version file details, file-type rollup, and a total-downloads trend from `data/`; no scripts, no external requests). Pages hosts it, so it isn't committed.
+  (last-updated time in Central time, tiles, downloads-per-version bars split Windows / Linux, collapsible per-version
+  details for the last 5 versions, and new downloads per day for the current version from `data/`; no scripts, no external
+  requests). Pages hosts it, so it isn't committed.
+  "Downloads" = Windows installer + zip, or the Linux AppImage (GitHub counts requests, not people). "Update files" =
+  that version's own `.nupkg` packages. "Update checks" = the busiest update-feed file (`releases.*.json`, `RELEASES*`).
 - `data/<UTC timestamp>.json` (committed): raw per-asset counts from each run. One file per run (the name includes
   the time, so twice a day never collides). GitHub only reports cumulative counts, so these are the history for trends later.
 
