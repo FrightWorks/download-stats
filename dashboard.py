@@ -265,7 +265,9 @@ section{margin:1rem 0}h2{margin:0 0 .25rem;font-size:1.2rem}.note{color:var(--in
 .row{display:grid;grid-template-columns:5.5rem 1fr 4.5rem;gap:.6rem;align-items:center;margin:.35rem 0;font-size:.9rem}
 .row .n,td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .bar{display:flex;gap:2px;height:1.2rem}
-.bar i{display:block;height:100%;border-radius:0 4px 4px 0;min-width:2px}
+.bar i{display:block;height:100%;border-radius:0 4px 4px 0;min-width:2px;position:relative;outline:0}
+.bar i:hover::after,.bar i:focus::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:0;background:var(--ink);color:var(--bg);padding:.2rem .5rem;border-radius:4px;font-size:.8rem;font-weight:600;white-space:nowrap;z-index:5;pointer-events:none}
+.trend.bars .val{fill:var(--ink);font-weight:600}
 td small{display:block;color:var(--muted);font-size:.8rem}
 .trend.bars rect{fill:var(--s1)}
 details{border-top:1px solid var(--line);padding:.5rem 0}details:first-of-type{border-top:0}
@@ -282,11 +284,15 @@ footer{color:var(--muted);font-size:.8rem;text-align:center;padding:1rem 0}
 """
 
 
+DAILY_DAYS = 14  # most recent days shown in the per-day chart
+
+
 def render_daily(daily):
     if not daily:
         return ('<p class="note">The chart appears once snapshots span at least two days '
-                "(it shows new downloads per day).</p>")
-    W, H, L, R, T, B = 600, 220, 40, 14, 14, 30
+                "(it shows new downloads per day, the last 14 days).</p>")
+    daily = daily[-DAILY_DAYS:]
+    W, H, L, R, T, B = 600, 220, 40, 14, 22, 30
     mx = max([n for _, n in daily] + [1])
     slot = (W - L - R) / len(daily)
     bw = min(slot * 0.7, 40)
@@ -295,14 +301,14 @@ def render_daily(daily):
         h = n / mx * (H - T - B)
         x = L + i * slot + (slot - bw) / 2
         bars.append(f'<rect x="{x:.1f}" y="{H - B - h:.1f}" width="{bw:.1f}" height="{max(h, 1):.1f}" rx="3">'
-                    f'<title>{d:%b} {d.day}: {n:,} new</title></rect>')
+                    f'<title>{d:%b} {d.day}: {n:,} new</title></rect>'
+                    f'<text class="val" x="{x + bw / 2:.1f}" y="{H - B - h - 5:.1f}" text-anchor="middle">{n:,}</text>'
+                    f'<text x="{x + bw / 2:.1f}" y="{H - 8}" text-anchor="middle">{d:%b} {d.day}</text>')
     return (f'<svg class="trend bars" viewBox="0 0 {W} {H}" role="img" aria-label="New downloads per day, '
             f'{daily[0][0]:%b} {daily[0][0].day} to {daily[-1][0]:%b} {daily[-1][0].day}">'
             f'<line class="gr" x1="{L}" x2="{W - R}" y1="{H - B}" y2="{H - B}"/>'
             f'<text x="{L - 6}" y="{T + 4}" text-anchor="end">{mx:,}</text>'
             f'<text x="{L - 6}" y="{H - B + 4}" text-anchor="end">0</text>'
-            f'<text x="{L}" y="{H - 8}">{daily[0][0]:%b} {daily[0][0].day}</text>'
-            f'<text x="{W - R}" y="{H - 8}" text-anchor="end">{daily[-1][0]:%b} {daily[-1][0].day}</text>'
             + "".join(bars) + "</svg>")
 
 
@@ -320,7 +326,7 @@ def render_chart(versions):
     rows = []
     for v, st, total in zip(versions, stats, totals):
         segs = "".join(f'<i class="{c}" style="width:{st[p]["downloads"] / mx * 100:.2f}%" '
-                       f'title="{p}: {st[p]["downloads"]:,}"></i>'
+                       f'tabindex="0" data-tip="{html.escape(v["tag"])} {p}: {st[p]["downloads"]:,}"></i>'
                        for p, c in zip(PLATFORMS, ("s1", "s2")) if st[p]["downloads"])
         rows.append(f'<div class="row"><span>{html.escape(v["tag"])}</span><div class="bar">{segs}</div>'
                     f'<span class="n">{total:,}</span></div>')
@@ -410,7 +416,7 @@ def render(summary, repo, generated, history=None):
                    "a rough sign of installs in use, not unique users. The same installs can show up under several "
                    "versions, so don't add update checks across rows.</p></section>")
         out.append(f"<section><h2>New downloads per day</h2><p class=\"note\">Installer, zip and AppImage for "
-                   f"{e(cur['tag'])}, from the twice-daily snapshots (days are Central time).</p>"
+                   f"{e(cur['tag'])}, from the twice-daily snapshots (the last {DAILY_DAYS} days, Central time).</p>"
                    + render_daily(daily_new(history)) + "</section>")
     else:
         out.append('<section><p class="note">No releases yet.</p></section>')

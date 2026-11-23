@@ -132,6 +132,8 @@ class Tests(unittest.TestCase):
             self._history(d)
             page = dashboard.render(s, "o/r", now, dashboard.load_history(d, "v1", RULES))
         self.assertIn("<rect", page)
+        self.assertIn('class="val"', page)  # number on each bar
+        self.assertIn('data-tip="v1.1 Windows: 12"', page)  # hover text on the per-version bars
         self.assertNotIn("chart appears once", page)
         with tempfile.TemporaryDirectory() as d:
             now = datetime.datetime(2026, 3, 4, 5, 6, 7, tzinfo=datetime.timezone.utc)
