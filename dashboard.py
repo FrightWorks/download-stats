@@ -90,16 +90,72 @@ def human_size(n):
             return f"{n:.1f} {unit}"
 
 
-PLAYER_TYPES = {"Windows installer", "Windows zip", "Linux AppImage"}
-UPDATE_TYPES = {"Windows update package", "Linux update package",
-                "Windows update feed", "Linux update feed"}
+# type -> (platform, kind). "player" = a person getting the game; "update" = update packages the
+# in-app updater fetches. Update feeds (RELEASES, *.json) are update *checks*, so they are in neither.
+TYPE_KINDS = {
+    "Windows installer": ("Windows", "player"), "Windows zip": ("Windows", "player"),
+    "Windows update package": ("Windows", "update"),
+    "Linux AppImage": ("Linux", "player"), "Linux update package": ("Linux", "update"),
+}
+PLAYER_LABELS = {"Windows installer": "Installer", "Windows zip": "Zip", "Linux AppImage": "AppImage"}
+PLATFORMS = ("Windows", "Linux")
+VERSION_LIMIT = 5  # how many versions the page and STATS.md show
 
 
-def split_downloads(files):
-    """(player, update, other) download totals for a list of file dicts."""
-    player = sum(f["downloads"] for f in files if f["type"] in PLAYER_TYPES)
-    update = sum(f["downloads"] for f in files if f["type"] in UPDATE_TYPES)
-    return player, update, sum(f["downloads"] for f in files) - player - update
+def current_version(versions):
+    """The newest published version: first non-draft, non-pre-release (else first non-draft, else first)."""
+    for ok in (lambda v: not v["draft"] and not v["prerelease"], lambda v: not v["draft"], lambda v: True):
+        for v in versions:
+            if ok(v):
+                return v
+    return None
+
+
+FEED_PLATFORMS = {"Windows update feed": "Windows", "Linux update feed": "Linux"}
+
+
+def shown_versions(versions):
+    """The newest VERSION_LIMIT published (non-draft) versions, current one first."""
+    pub = [v for v in versions if not v["draft"]] or list(versions)
+    cur = current_version(pub)
+    rest = [v for v in pub if v is not cur]
+    return ([cur] if cur else []) + rest[:VERSION_LIMIT - 1]
+
+
+def platform_stats(version):
+    """Per-platform numbers for one version.
+
+    {platform: {"downloads", "parts": [(label, n)], "updates", "update_parts": [(label, n)], "checks"}}
+    downloads = installer + zip (Windows) or AppImage (Linux) combined. updates = downloads of this version's own
+    update packages (a release also carries the previous version's full package; that one is skipped).
+    checks = the busiest update-feed file, i.e. roughly how often installed copies looked for an update.
+    """
+    out = {p: {"downloads": 0, "parts": {}, "updates": 0, "update_parts": {}, "checks": 0} for p in PLATFORMS}
+    if not version:
+        return out
+    ver = version["tag"].lstrip("vV")
+    for f in version["files"]:
+        if f["type"] in FEED_PLATFORMS:
+            st = out[FEED_PLATFORMS[f["type"]]]
+            st["checks"] = max(st["checks"], f["downloads"])
+            continue
+        plat, kind = TYPE_KINDS.get(f["type"], (None, None))
+        if not plat:
+            continue
+        st = out[plat]
+        if kind == "player":
+            st["downloads"] += f["downloads"]
+            label, bucket = PLAYER_LABELS[f["type"]], st["parts"]
+        else:
+            if f"-{ver}-" not in f["name"]:
+                continue
+            st["updates"] += f["downloads"]
+            label, bucket = ("Delta" if "delta" in f["name"].lower() else "Full"), st["update_parts"]
+        bucket[label] = bucket.get(label, 0) + f["downloads"]
+    for st in out.values():
+        for key in ("parts", "update_parts"):
+            st[key] = sorted(st[key].items(), key=lambda kv: (-kv[1], kv[0]))
+    return out
 
 
 def central_time(utc):
@@ -125,8 +181,8 @@ def parse_utc(s):
     return datetime.datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
 
 
-def load_trend(data_dir):
-    """[(taken_at ISO string, total downloads)] from every snapshot in data_dir, oldest first."""
+def load_history(data_dir, tag, rules):
+    """[(taken_at ISO string, platform_stats of release `tag`)] from every snapshot, oldest first."""
     points = []
     if os.path.isdir(data_dir):
         for name in sorted(os.listdir(data_dir)):
@@ -135,13 +191,44 @@ def load_trend(data_dir):
             try:
                 with open(os.path.join(data_dir, name), encoding="utf-8") as f:
                     snap = json.load(f)
-                total = sum(a["download_count"] for r in snap["releases"] for a in r["assets"])
+                rels = [r for r in snap["releases"] if r["tag"] == tag]
+                if not rels:
+                    continue
+                files = [{"name": a["name"], "downloads": a["download_count"], "type": classify(a["name"], rules)[0]}
+                         for r in rels for a in r["assets"]]
                 parse_utc(snap["taken_at"])
-                points.append((snap["taken_at"], total))
+                points.append((snap["taken_at"], platform_stats({"tag": tag, "files": files})))
             except (OSError, ValueError, KeyError, TypeError):
                 continue
-    points.sort()
+    points.sort(key=lambda p: p[0])
     return points
+
+
+def recent_change(history, platform, days=7):
+    """(new player downloads, label) over the last `days`, or None with fewer than two snapshots.
+
+    Uses the newest snapshot at least `days` old (but not more than a day older than that) as the baseline;
+    otherwise the oldest snapshot, and the label says so.
+    """
+    if len(history) < 2:
+        return None
+    newest_t = parse_utc(history[-1][0])
+    cutoff = newest_t - datetime.timedelta(days=days)
+    older = [h for h in history if cutoff - datetime.timedelta(days=1) <= parse_utc(h[0]) <= cutoff]
+    base = older[-1] if older else history[0]
+    label = f"last {days} days" if older else f"since {central_time(parse_utc(base[0]))[0]:%b} {central_time(parse_utc(base[0]))[0].day}"
+    return max(history[-1][1][platform]["downloads"] - base[1][platform]["downloads"], 0), label
+
+
+def daily_new(history):
+    """[(date, new player downloads that day, Central time)] from consecutive days' last snapshots.
+    Days after a gap in the snapshots are skipped."""
+    last = {}
+    for t, st in history:
+        last[central_time(parse_utc(t))[0].date()] = sum(st[p]["downloads"] for p in PLATFORMS)
+    days = sorted(last)
+    return [(d, max(last[d] - last[prev], 0)) for prev, d in zip(days, days[1:])
+            if (d - prev).days == 1]  # a gap in snapshots would otherwise show as one huge day
 
 
 def mb(n):
@@ -168,25 +255,25 @@ header{padding:1.5rem 0 .5rem}h1{margin:0;font-size:1.7rem;line-height:1.2}
 .sub{color:var(--ink2);margin:.3rem 0}a{color:var(--link)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:.75rem;margin:1rem 0}
 .tile,section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:1rem}
+section{margin:1rem 0}h2{margin:0 0 .25rem;font-size:1.2rem}.note{color:var(--ink2);font-size:.9rem;margin:.1rem 0 .8rem}
 .tile .k{color:var(--ink2);font-size:.85rem}
 .tile .v{font-size:2rem;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
-.tile .d{color:var(--muted);font-size:.8rem}
-section{margin:1rem 0}h2{margin:0 0 .25rem;font-size:1.2rem}.note{color:var(--ink2);font-size:.9rem;margin:.1rem 0 .8rem}
+.tile .d{color:var(--muted);font-size:.8rem}.tile .new{color:var(--s1);font-weight:600}
 .legend{display:flex;gap:1rem;flex-wrap:wrap;font-size:.85rem;color:var(--ink2);margin-bottom:.6rem}
 .sw{display:inline-block;width:.8rem;height:.8rem;border-radius:3px;margin-right:.35rem;vertical-align:-1px}
-.s1{background:var(--s1)}.s2{background:var(--s2)}.s3{background:var(--s3)}
+.s1{background:var(--s1)}.s2{background:var(--s2)}
 .row{display:grid;grid-template-columns:5.5rem 1fr 4.5rem;gap:.6rem;align-items:center;margin:.35rem 0;font-size:.9rem}
 .row .n,td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
 .bar{display:flex;gap:2px;height:1.2rem}
 .bar i{display:block;height:100%;border-radius:0 4px 4px 0;min-width:2px}
+td small{display:block;color:var(--muted);font-size:.8rem}
+.trend.bars rect{fill:var(--s1)}
 details{border-top:1px solid var(--line);padding:.5rem 0}details:first-of-type{border-top:0}
 summary{cursor:pointer;font-weight:600;display:flex;flex-wrap:wrap;gap:.25rem .8rem;align-items:baseline}
 summary small{font-weight:400;color:var(--ink2)}
 .tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;margin:.5rem 0;font-size:.9rem}
 th,td{text-align:left;padding:.4rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
 th{color:var(--ink2);font-weight:600;font-size:.8rem}.desc{color:var(--ink2);min-width:12rem}.fn{min-width:9rem}td.n{white-space:nowrap}
-.share{display:block;width:5rem;height:.5rem;margin-top:.45rem;background:var(--track);border-radius:4px;overflow:hidden}
-.share i{display:block;height:100%;background:var(--s1)}
 .trend{width:100%;height:auto}.trend text{fill:var(--muted);font-size:11px}
 .trend .ln{fill:none;stroke:var(--s1);stroke-width:2}.trend .gr{stroke:var(--line);stroke-width:1}
 .trend circle{fill:var(--s1);stroke:var(--surface);stroke-width:2}
@@ -195,57 +282,80 @@ footer{color:var(--muted);font-size:.8rem;text-align:center;padding:1rem 0}
 """
 
 
+def render_daily(daily):
+    if not daily:
+        return ('<p class="note">The chart appears once snapshots span at least two days '
+                "(it shows new downloads per day).</p>")
+    W, H, L, R, T, B = 600, 220, 40, 14, 14, 30
+    mx = max([n for _, n in daily] + [1])
+    slot = (W - L - R) / len(daily)
+    bw = min(slot * 0.7, 40)
+    bars = []
+    for i, (d, n) in enumerate(daily):
+        h = n / mx * (H - T - B)
+        x = L + i * slot + (slot - bw) / 2
+        bars.append(f'<rect x="{x:.1f}" y="{H - B - h:.1f}" width="{bw:.1f}" height="{max(h, 1):.1f}" rx="3">'
+                    f'<title>{d:%b} {d.day}: {n:,} new</title></rect>')
+    return (f'<svg class="trend bars" viewBox="0 0 {W} {H}" role="img" aria-label="New downloads per day, '
+            f'{daily[0][0]:%b} {daily[0][0].day} to {daily[-1][0]:%b} {daily[-1][0].day}">'
+            f'<line class="gr" x1="{L}" x2="{W - R}" y1="{H - B}" y2="{H - B}"/>'
+            f'<text x="{L - 6}" y="{T + 4}" text-anchor="end">{mx:,}</text>'
+            f'<text x="{L - 6}" y="{H - B + 4}" text-anchor="end">0</text>'
+            f'<text x="{L}" y="{H - 8}">{daily[0][0]:%b} {daily[0][0].day}</text>'
+            f'<text x="{W - R}" y="{H - 8}" text-anchor="end">{daily[-1][0]:%b} {daily[-1][0].day}</text>'
+            + "".join(bars) + "</svg>")
+
+
+def parts_text(parts):
+    return " &middot; ".join(f"{html.escape(l)} {n:,}" for l, n in parts)
+
+
 def render_chart(versions):
-    mx = max([v["downloads"] for v in versions] + [1])
-    splits = [split_downloads(v["files"]) for v in versions]
-    has_other = any(s[2] for s in splits)
-    legend = ('<div class="legend"><span><span class="sw s1"></span>Players</span>'
-              '<span><span class="sw s2"></span>Update traffic</span>'
-              + ('<span><span class="sw s3"></span>Other</span>' if has_other else "") + "</div>")
+    """One row per version: bar of downloads, split Windows / Linux, update files shown at the right."""
+    stats = [platform_stats(v) for v in versions]
+    totals = [sum(st[p]["downloads"] for p in PLATFORMS) for st in stats]
+    mx = max(totals + [1])
+    legend = ('<div class="legend"><span><span class="sw s1"></span>Windows downloads</span>'
+              '<span><span class="sw s2"></span>Linux downloads</span></div>')
     rows = []
-    for v, (p, u, o) in zip(versions, splits):
-        segs = "".join(f'<i class="{c}" style="width:{n / mx * 100:.2f}%" title="{lbl}: {n:,}"></i>'
-                       for n, c, lbl in ((p, "s1", "Players"), (u, "s2", "Update traffic"), (o, "s3", "Other")) if n)
+    for v, st, total in zip(versions, stats, totals):
+        segs = "".join(f'<i class="{c}" style="width:{st[p]["downloads"] / mx * 100:.2f}%" '
+                       f'title="{p}: {st[p]["downloads"]:,}"></i>'
+                       for p, c in zip(PLATFORMS, ("s1", "s2")) if st[p]["downloads"])
         rows.append(f'<div class="row"><span>{html.escape(v["tag"])}</span><div class="bar">{segs}</div>'
-                    f'<span class="n">{v["downloads"]:,}</span></div>')
+                    f'<span class="n">{total:,}</span></div>')
     return legend + "".join(rows)
 
 
-def render_trend(trend):
-    if len(trend) < 2:
-        return '<p class="note">The trend chart appears after a few runs (it needs at least two snapshots).</p>'
-    W, H, L, R, T, B = 600, 220, 60, 14, 14, 30
-    ts = [parse_utc(t).timestamp() for t, _ in trend]
-    vals = [v for _, v in trend]
-    lo, hi = min(vals), max(vals)
-    if hi == lo:
-        hi, lo = hi + 1, max(lo - 1, 0)
-    t0, t1 = ts[0], ts[-1]
-    x = lambda t: L + (t - t0) / ((t1 - t0) or 1) * (W - L - R)
-    y = lambda v: T + (hi - v) / (hi - lo) * (H - T - B)
-    pts = " ".join(f"{x(t):.1f},{y(v):.1f}" for t, v in zip(ts, vals))
-    dots = "".join(f'<circle cx="{x(t):.1f}" cy="{y(v):.1f}" r="4"><title>{format_central(parse_utc(s))}: {v:,}</title></circle>'
-                   for t, v, (s, _) in zip(ts, vals, trend))
-    d0 = central_time(parse_utc(trend[0][0]))[0]
-    d1 = central_time(parse_utc(trend[-1][0]))[0]
-    return (f'<svg class="trend" viewBox="0 0 {W} {H}" role="img" aria-label="Total downloads over time, '
-            f'from {vals[0]:,} to {vals[-1]:,}">'
-            f'<line class="gr" x1="{L}" x2="{W - R}" y1="{y(hi):.1f}" y2="{y(hi):.1f}"/>'
-            f'<line class="gr" x1="{L}" x2="{W - R}" y1="{y(lo):.1f}" y2="{y(lo):.1f}"/>'
-            f'<text x="{L - 6}" y="{y(hi) + 4:.1f}" text-anchor="end">{hi:,}</text>'
-            f'<text x="{L - 6}" y="{y(lo) + 4:.1f}" text-anchor="end">{lo:,}</text>'
-            f'<text x="{L}" y="{H - 8}">{d0:%b} {d0.day}</text>'
-            f'<text x="{W - R}" y="{H - 8}" text-anchor="end">{d1:%b} {d1.day}</text>'
-            f'<polyline class="ln" points="{pts}"/>{dots}</svg>')
+def render_version_table(st):
+    out = ['<table><tr><th>Platform</th><th class="n">Downloads</th><th class="n">Update files</th>'
+           '<th class="n">Update checks</th></tr>']
+    for p in PLATFORMS:
+        x = st[p]
+        out.append(f'<tr><td>{p}</td><td class="n">{x["downloads"]:,}<small>{parts_text(x["parts"])}</small></td>'
+                   f'<td class="n">{x["updates"]:,}<small>{parts_text(x["update_parts"])}</small></td>'
+                   f'<td class="n">{x["checks"]:,}</td></tr>')
+    out.append("</table>")
+    return "".join(out)
 
 
-def render(summary, repo, generated, trend=None):
+def render_files(v):
+    e = html.escape
+    out = ['<table><tr><th>File</th><th>What it is</th><th class="n">Size</th><th class="n">Downloads</th></tr>']
+    for f in v["files"]:
+        out.append(f'<tr><td class="fn">{break_name(f["name"])}</td><td class="desc">{e(f["description"])}</td>'
+                   f'<td class="n">{mb(f["size"])}</td><td class="n">{f["downloads"]:,}</td></tr>')
+    out.append("</table>")
+    return "".join(out)
+
+
+def render(summary, repo, generated, history=None):
     """The self-contained page. `generated` is an aware UTC datetime (or a plain string)."""
     e = html.escape
     updated = format_central(generated) if isinstance(generated, datetime.datetime) else str(generated)
-    versions = summary["versions"]
-    player_total = sum(split_downloads(v["files"])[0] for v in versions)
-    latest = next((v for v in versions if not v["draft"]), versions[0] if versions else None)
+    shown = shown_versions(summary["versions"])
+    cur = shown[0] if shown else None
+    history = history or []
     repo_url = f"https://github.com/{repo}/releases"
     tile = lambda k, v, d="": (f'<div class="tile"><div class="k">{k}</div><div class="v">{v}</div>'
                                f'<div class="d">{d}</div></div>')
@@ -253,65 +363,73 @@ def render(summary, repo, generated, trend=None):
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>FrightWorks PC port downloads</title><style>{CSS}</style></head><body><main>
 <header><h1>FrightWorks PC port downloads</h1>
-<p class="sub">Last updated {e(updated)} &middot; <a href="{e(repo_url)}">See the releases on GitHub</a></p></header>
-<div class="tiles">"""]
-    out.append(tile("Total downloads", f"{summary['total']:,}", "every file, every version"))
-    out.append(tile("Player downloads", f"{player_total:,}", "installer, zip and AppImage; not updates"))
-    if latest:
-        out.append(tile("Latest version", e(latest["tag"]), f"{latest['downloads']:,} downloads"))
-    out.append(tile("Releases", f"{len(versions):,}", "published versions"))
-    out.append("</div>")
-    out.append('<section><h2>Downloads per version</h2><p class="note">Newest first. '
-               "Players are people getting the game; update traffic is the in-app updater fetching files.</p>"
-               + render_chart(versions) + "</section>")
-    out.append('<section><h2>Details per version</h2><p class="note">Click a version to see its files.</p>')
-    for v in versions:
-        flag = " (draft)" if v["draft"] else " (pre-release)" if v["prerelease"] else ""
-        vt = v["downloads"] or 1
-        out.append(f'<details{" open" if v is latest else ""}><summary><span>{e(v["tag"])}{flag}</span>'
-                   f'<small>{e(v["date"])} &middot; {v["downloads"]:,} downloads</small></summary><div class="tbl">'
-                   '<table><tr><th>File</th><th>What it is</th><th class="n">Size</th><th class="n">Downloads</th>'
-                   '<th>Share</th></tr>')
-        for f in v["files"]:
-            share = f["downloads"] / vt * 100
-            out.append(f'<tr><td class="fn">{break_name(f["name"])}</td><td class="desc">{e(f["description"])}</td>'
-                       f'<td class="n">{mb(f["size"])}</td><td class="n">{f["downloads"]:,}</td>'
-                       f'<td><span class="share" title="{share:.0f}% of this version">'
-                       f'<i style="width:{share:.1f}%"></i></span></td></tr>')
-        out.append("</table></div></details>")
-    out.append("</section>")
-    out.append('<section><h2>By file type, all versions</h2><p class="note">Update feeds and update packages '
-               "count the app checking for or fetching updates, not new players.</p>"
-               '<div class="tbl"><table><tr><th>Type</th><th class="n">Files</th><th class="n">Downloads</th></tr>')
-    for t in summary["types"]:
-        out.append(f'<tr><td>{e(t["type"])}</td><td class="n">{t["files"]}</td>'
-                   f'<td class="n">{t["downloads"]:,}</td></tr>')
-    out.append("</table></div></section>")
-    out.append("<section><h2>Total downloads over time</h2>" + render_trend(trend or []) + "</section>")
+<p class="sub">Last updated {e(updated)} &middot; <a href="{e(repo_url)}">See the releases on GitHub</a></p></header>"""]
+    if cur:
+        stats = platform_stats(cur)
+        out.append('<div class="tiles">')
+        out.append(tile("Latest version", e(cur["tag"]), f"released {e(cur['date'])}"))
+        for p in PLATFORMS:
+            recent = recent_change(history, p)
+            extra = f'<br><span class="new">+{recent[0]:,} {recent[1]}</span>' if recent else ""
+            out.append(tile(f"{p} downloads", f"{stats[p]['downloads']:,}",
+                            (parts_text(stats[p]["parts"]) or "no downloads yet") + extra))
+        up = {p: stats[p]["updates"] for p in PLATFORMS}
+        out.append(tile("Update files", f"{sum(up.values()):,}", " &middot; ".join(f"{p} {n:,}" for p, n in up.items())))
+        out.append("</div>")
+        out.append(f'<section><h2>Downloads per version</h2><p class="note">The last {len(shown)} versions, newest first. '
+                   "Installer and zip are combined for Windows. Counts keep growing after a release, so older "
+                   "versions are not final.</p>" + render_chart(shown) + "</section>")
+        out.append('<section><h2>Details per version</h2><p class="note">Click a version to see its numbers and files.</p>')
+        for v in shown:
+            flag = " (pre-release)" if v["prerelease"] else ""
+            st = platform_stats(v)
+            total = sum(st[p]["downloads"] for p in PLATFORMS)
+            out.append(f'<details{" open" if v is cur else ""}><summary><span>{e(v["tag"])}{flag}</span>'
+                       f'<small>{e(v["date"])} &middot; {total:,} downloads</small></summary><div class="tbl">'
+                       + render_version_table(st) + render_files(v) + "</div></details>")
+        out.append("</section>")
+        out.append('<section><h2>What these numbers mean</h2><p class="note"><b>Downloads</b> are requests for the '
+                   "game: the Windows installer plus the Windows zip, or the Linux AppImage. "
+                   "GitHub counts requests, not people, so retries, scanners and someone grabbing both the installer "
+                   "and the zip all add up; treat it as an upper bound on new players.</p>"
+                   '<p class="note"><b>Update files</b> are the in-app updater fetching a version\'s update packages '
+                   "(full or delta). One update can fetch more than one file, so this is not the number of people who updated.</p>"
+                   '<p class="note"><b>Update checks</b> are installed copies looking for an update (the busiest feed file), '
+                   "a rough sign of installs in use, not unique users. The same installs can show up under several "
+                   "versions, so don't add update checks across rows.</p></section>")
+        out.append(f"<section><h2>New downloads per day</h2><p class=\"note\">Installer, zip and AppImage for "
+                   f"{e(cur['tag'])}, from the twice-daily snapshots (days are Central time).</p>"
+                   + render_daily(daily_new(history)) + "</section>")
+    else:
+        out.append('<section><p class="note">No releases yet.</p></section>')
     out.append("<footer>One snapshot per run, twice a day.</footer></main></body></html>\n")
     return "\n".join(out)
 
 
 def render_markdown(summary, repo, generated):
-    """The same content as the HTML page, as GitHub-flavoured markdown."""
+    """The last few versions' numbers as GitHub-flavoured markdown."""
     def cell(s):
         return str(s).replace("|", "\\|")
-    out = [f"# Download stats: {repo}", "",
-           f"**{summary['total']:,}** total downloads, all files and versions.", "",
-           f"Last updated {generated}. Update-feed files count updater checks, not players.", "",
-           "## By file type, all versions", "",
-           "| Type | Files | Downloads |", "|---|---:|---:|"]
-    for t in summary["types"]:
-        out.append(f"| {cell(t['type'])} | {t['files']} | {t['downloads']:,} |")
-    out += ["", "## By version", ""]
-    for v in summary["versions"]:
-        flag = " (draft)" if v["draft"] else " (pre-release)" if v["prerelease"] else ""
-        out += [f"### {v['tag']}{flag}", "", f"{v['date']} · {v['downloads']:,} downloads", "",
-                "| File | What it is | Size | Downloads |", "|---|---|---:|---:|"]
-        for f in v["files"]:
-            out.append(f"| {cell(f['name'])} | {cell(f['description'])} | "
-                       f"{human_size(f['size'])} | {f['downloads']:,} |")
-        out.append("")
+    shown = shown_versions(summary["versions"])
+    out = [f"# Download stats: {repo}", ""]
+    if not shown:
+        return "\n".join(out + ["No releases yet.", ""])
+    cur = shown[0]
+    out += [f"Current version **{cur['tag']}** (released {cur['date']}). Last updated {generated}.", "",
+            "Downloads = installer + zip (Windows) or AppImage (Linux); GitHub counts requests, not unique people. "
+            "Update files = a version's update packages fetched by the in-app updater. Update checks = the "
+            "busiest update-feed file, a rough sign of installs in use.", "",
+            f"## Last {len(shown)} versions", "",
+            "| Version | Released | Windows downloads | Windows update files | Windows update checks "
+            "| Linux downloads | Linux update files | Linux update checks |", "|---|---|---:|---:|---:|---:|---:|---:|"]
+    for v in shown:
+        st = platform_stats(v)
+        cols = " | ".join(f"{st[p][k]:,}" for p in PLATFORMS for k in ("downloads", "updates", "checks"))
+        out.append(f"| {v['tag']} | {v['date']} | {cols} |")
+    out += ["", f"## Files in {cur['tag']}", "", "| File | What it is | Size | Downloads |", "|---|---|---:|---:|"]
+    for f in cur["files"]:
+        out.append(f"| {cell(f['name'])} | {cell(f['description'])} | {human_size(f['size'])} | {f['downloads']:,} |")
+    out.append("")
     return "\n".join(out)
 
 
@@ -343,7 +461,9 @@ def main():
     summary = summarize(releases, load_rules(args.map))
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
-        f.write(render(summary, args.repo, now, load_trend(args.data_dir)))
+        cur = current_version(summary["versions"])
+        history = load_history(args.data_dir, cur["tag"], load_rules(args.map)) if cur else []
+        f.write(render(summary, args.repo, now, history))
     with open(args.md, "w", encoding="utf-8", newline="\n") as f:
         f.write(render_markdown(summary, args.repo, now.strftime("%Y-%m-%d %H:%M UTC")))
     print(f"snapshot: {snap}\npage: {args.out}\nmarkdown: {args.md}\ntotal downloads: {summary['total']}")

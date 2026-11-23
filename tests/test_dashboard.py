@@ -22,7 +22,9 @@ FIXTURE = [
     {"tag_name": "v1.1", "published_at": "2026-02-01T00:00:00Z", "assets": [
         asset("FrightWorks-1.1.zip", 5), asset("FrightWorks-win-Setup.exe", 7),
         asset("FrightWorks-1.1-linux-full.nupkg", 2), asset("FrightWorks-1.1-full.nupkg", 1),
-        asset("mystery.bin", 3), asset("FrightWorks.AppImage", 4)]},
+        asset("mystery.bin", 3), asset("FrightWorks.AppImage", 4),
+        asset("FrightWorks-1.0-full.nupkg", 9), asset("releases.win.json", 20), asset("RELEASES", 6),
+        asset("releases.linux.json", 8)]},
 ]
 
 
@@ -38,20 +40,42 @@ class Tests(unittest.TestCase):
 
     def test_summary(self):
         s = dashboard.summarize(FIXTURE, RULES)
-        self.assertEqual(s["total"], 32)
+        self.assertEqual(s["total"], 75)
         self.assertEqual([v["tag"] for v in s["versions"]], ["v1.1", "v1.0"])
-        self.assertEqual([v["downloads"] for v in s["versions"]], [22, 10])
+        self.assertEqual([v["downloads"] for v in s["versions"]], [65, 10])
         self.assertEqual(s["versions"][0]["date"], "2026-02-01")
         types = {t["type"]: t["downloads"] for t in s["types"]}
         self.assertEqual(types["Windows zip"], 15)
         self.assertEqual(types["unclassified"], 3)
         self.assertEqual(sum(types.values()), s["total"])
-        self.assertEqual(s["versions"][0]["files"][0]["name"], "FrightWorks-win-Setup.exe")
+        self.assertEqual(s["versions"][0]["files"][0]["name"], "releases.win.json")
 
-    def test_split_downloads(self):
+    def test_platform_stats(self):
         s = dashboard.summarize(FIXTURE, RULES)
-        self.assertEqual(dashboard.split_downloads(s["versions"][0]["files"]), (16, 3, 3))
-        self.assertEqual(dashboard.split_downloads(s["versions"][1]["files"]), (10, 0, 0))
+        cur = dashboard.current_version(s["versions"])
+        self.assertEqual(cur["tag"], "v1.1")
+        st = dashboard.platform_stats(cur)
+        self.assertEqual(st["Windows"]["downloads"], 12)
+        self.assertEqual(st["Windows"]["parts"], [("Installer", 7), ("Zip", 5)])
+        self.assertEqual(st["Windows"]["updates"], 1)  # the 1.0 package in this release is skipped
+        self.assertEqual(st["Windows"]["checks"], 20)
+        self.assertEqual(st["Linux"]["checks"], 8)
+        self.assertEqual(st["Linux"]["downloads"], 4)
+        self.assertEqual(st["Linux"]["updates"], 2)
+        self.assertEqual(st["Linux"]["update_parts"], [("Full", 2)])
+        drafts = [{"tag": "v3", "draft": True, "prerelease": False}, {"tag": "v2", "draft": False, "prerelease": True},
+                  {"tag": "v1", "draft": False, "prerelease": False}]
+        self.assertEqual(dashboard.current_version(drafts)["tag"], "v1")
+
+    def test_shown_versions_limit(self):
+        rels = [{"tag_name": f"v{i}", "published_at": f"2026-01-{i:02d}T00:00:00Z", "assets": [asset("a.zip", i)]}
+                for i in range(1, 9)]
+        rels.append({"tag_name": "v9", "draft": True, "published_at": "2026-01-09T00:00:00Z", "assets": []})
+        shown = dashboard.shown_versions(dashboard.summarize(rels, RULES)["versions"])
+        self.assertEqual([v["tag"] for v in shown], ["v8", "v7", "v6", "v5", "v4"])
+        page = dashboard.render(dashboard.summarize(rels, RULES), "o/r", "now")
+        self.assertNotIn("v3", page)
+        self.assertNotIn("v9", page)
 
     def test_central_time(self):
         utc = datetime.timezone.utc
@@ -65,34 +89,50 @@ class Tests(unittest.TestCase):
         # DST starts Sun 2026-03-08 at 08:00 UTC
         self.assertEqual(dashboard.central_time(datetime.datetime(2026, 3, 8, 8, 0, tzinfo=utc))[1], "CDT")
 
-    def test_load_trend(self):
+    def _history(self, d):
+        for stamp, zip_n, linux_n in (("2026-03-05T200000Z", 9, 3), ("2026-03-04T200000Z", 4, 1),
+                                      ("2026-03-04T080000Z", 2, 1), ("2026-03-06T060000Z", 12, 5)):
+            now = datetime.datetime.strptime(stamp, "%Y-%m-%dT%H%M%SZ").replace(tzinfo=datetime.timezone.utc)
+            rels = [{"tag_name": "v1", "assets": [asset("FrightWorks-1.zip", zip_n), asset("RELEASES", 1),
+                                                  asset("FrightWorks.AppImage", linux_n)]},
+                    {"tag_name": "v0", "assets": [asset("FrightWorks-0.zip", 50)]}]
+            dashboard.save_snapshot(rels, "o/r", d, now)
+        with open(os.path.join(d, "junk.json"), "w") as f:
+            f.write("{")
+
+    def test_history(self):
         with tempfile.TemporaryDirectory() as d:
-            self.assertEqual(dashboard.load_trend(d), [])
-            for stamp, n in (("2026-03-05T050607Z", 9), ("2026-03-04T050607Z", 4)):
-                now = datetime.datetime.strptime(stamp, "%Y-%m-%dT%H%M%SZ").replace(tzinfo=datetime.timezone.utc)
-                rels = [{"tag_name": "v1", "assets": [asset("a.zip", n), asset("b", 1)]}]
-                dashboard.save_snapshot(rels, "o/r", d, now)
-            with open(os.path.join(d, "junk.json"), "w") as f:
-                f.write("{")
-            self.assertEqual(dashboard.load_trend(d),
-                             [("2026-03-04T05:06:07Z", 5), ("2026-03-05T05:06:07Z", 10)])
+            self.assertEqual(dashboard.load_history(d, "v1", RULES), [])
+            self._history(d)
+            h = dashboard.load_history(d, "v1", RULES)
+            self.assertEqual([t for t, _ in h], ["2026-03-04T08:00:00Z", "2026-03-04T20:00:00Z",
+                                                 "2026-03-05T20:00:00Z", "2026-03-06T06:00:00Z"])
+            self.assertEqual([st["Windows"]["downloads"] for _, st in h], [2, 4, 9, 12])
+            # Central dates: Mar 4, Mar 4, Mar 5, Mar 6 -> last-of-day totals 5, 12, 17
+            self.assertEqual(dashboard.daily_new(h), [(datetime.date(2026, 3, 5), 7), (datetime.date(2026, 3, 6), 5)])
+            self.assertEqual(dashboard.recent_change(h, "Windows"), (10, "since Mar 4"))
+            self.assertEqual(dashboard.recent_change(h, "Windows", days=1), (8, "last 1 days"))
+            self.assertIsNone(dashboard.recent_change(h[:1], "Windows"))
 
     def test_render_and_snapshot(self):
         now = datetime.datetime(2026, 11, 12, 0, 32, tzinfo=datetime.timezone.utc)
         s = dashboard.summarize(FIXTURE, RULES)
         page = dashboard.render(s, "o/r", now)
-        for text in ("v1.1", "Windows zip", "mystery.<wbr>bin", "unclassified", ">32<", ">26<",
-                     "6:32 PM CST", "github.com/o/r/releases", "trend chart appears after a few runs",
-                     "<details open>", "prefers-color-scheme:dark"):
+        for text in ("Latest version", "Windows downloads", "Linux downloads", "Installer 7", "mystery.<wbr>bin",
+                     "6:32 PM CST", "github.com/o/r/releases", "chart appears once snapshots span",
+                     "prefers-color-scheme:dark"):
             self.assertIn(text, page)
+        self.assertEqual(page.count("<details"), 2)  # one per version
         self.assertEqual(page.count("<details open>"), 1)
         self.assertNotIn("<script", page)
-        self.assertNotIn("<polyline", page)
+        self.assertNotIn("<rect", page)
         for bad in ("src=", "@import", "url("):
             self.assertNotIn(bad, page)
-        page = dashboard.render(s, "o/r", now, [("2026-11-11T00:00:00Z", 20), ("2026-11-12T00:00:00Z", 32)])
-        self.assertIn("<polyline", page)
-        self.assertNotIn("appears after a few runs", page)
+        with tempfile.TemporaryDirectory() as d:
+            self._history(d)
+            page = dashboard.render(s, "o/r", now, dashboard.load_history(d, "v1", RULES))
+        self.assertIn("<rect", page)
+        self.assertNotIn("chart appears once", page)
         with tempfile.TemporaryDirectory() as d:
             now = datetime.datetime(2026, 3, 4, 5, 6, 7, tzinfo=datetime.timezone.utc)
             path = dashboard.save_snapshot(FIXTURE, "o/r", d, now)
@@ -114,13 +154,13 @@ class Tests(unittest.TestCase):
 
     def test_markdown(self):
         md = dashboard.render_markdown(dashboard.summarize(FIXTURE, RULES), "o/r", "2026-03-04 05:06 UTC")
-        self.assertIn("**32** total downloads", md)
+        self.assertIn("Current version **v1.1**", md)
         self.assertIn("Last updated 2026-03-04 05:06 UTC", md)
-        self.assertIn("| Windows zip | 2 | 15 |", md)
-        self.assertIn("### v1.1", md)
-        self.assertLess(md.index("### v1.1"), md.index("### v1.0"))
+        self.assertIn("| v1.1 | 2026-02-01 | 12 | 1 | 20 | 4 | 2 | 8 |", md)
+        self.assertIn("| v1.0 | 2026-01-01 | 10 | 0 | 0 | 0 | 0 | 0 |", md)
         self.assertIn("| mystery.bin | unclassified | 100 B | 3 |", md)
         self.assertNotIn("\r", md)
+
 
 if __name__ == "__main__":
     unittest.main()
