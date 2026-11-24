@@ -27,6 +27,10 @@ Regenerated on every run:
   requests). Pages hosts it, so it isn't committed.
   "Downloads" = Windows installer + zip, or the Linux AppImage (GitHub counts requests, not people). "Update files" =
   that version's own `.nupkg` packages. "Update checks" = the busiest update-feed file (`releases.*.json`, `RELEASES*`).
+- `output/stats.json` (git-ignored, published next to the page): the same numbers as the page, as JSON
+  (`schema` 1; versions, per-platform numbers, the all-versions total, the 7-day change, new downloads per day).
+  https://frightworks.dev/stats/ reads it at build time, so keep existing fields stable and bump `DATA_SCHEMA` in
+  `dashboard.py` if one has to change meaning or go away.
 - `data/<UTC timestamp>.json` (committed): raw per-asset counts from each run. One file per run (the name includes
   the time, so twice a day never collides). GitHub only reports cumulative counts, so these are the history for trends later.
 

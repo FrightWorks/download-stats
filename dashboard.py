@@ -424,6 +424,43 @@ def render(summary, repo, generated, history=None):
     return "\n".join(out)
 
 
+DATA_SCHEMA = 1  # bump when a field in stats.json changes meaning or is removed
+
+
+def render_data(summary, repo, generated, history=None):
+    """The numbers the page shows, as a dict for stats.json (read by frightworks.dev/stats/ at build time).
+
+    Same rules as the page: the last VERSION_LIMIT published versions (current first), per-platform numbers,
+    the all-versions total, the 7-day change and the last DAILY_DAYS days of new downloads for the current version.
+    """
+    history = history or []
+    shown = shown_versions(summary["versions"])
+    all_total, all_per = all_versions_total(summary["versions"])
+
+    def platforms(st):
+        return {p: {"downloads": st[p]["downloads"], "updates": st[p]["updates"], "checks": st[p]["checks"],
+                    "parts": [{"label": l, "count": n} for l, n in st[p]["parts"]],
+                    "updateParts": [{"label": l, "count": n} for l, n in st[p]["update_parts"]]}
+                for p in PLATFORMS}
+
+    versions = []
+    for v in shown:
+        st = platform_stats(v)
+        versions.append({"tag": v["tag"], "date": v["date"], "prerelease": v["prerelease"],
+                         "downloads": sum(st[p]["downloads"] for p in PLATFORMS), "platforms": platforms(st),
+                         "files": [{"name": f["name"], "description": f["description"], "size": f["size"],
+                                    "downloads": f["downloads"]} for f in v["files"]]})
+    recent = {}
+    for p in PLATFORMS:
+        r = recent_change(history, p) if shown else None
+        recent[p] = {"count": r[0], "label": r[1]} if r else None
+    daily = [{"date": d.isoformat(), "count": n} for d, n in daily_new(history)[-DAILY_DAYS:]] if shown else []
+    gen = generated.strftime("%Y-%m-%dT%H:%M:%SZ") if isinstance(generated, datetime.datetime) else str(generated)
+    return {"schema": DATA_SCHEMA, "repo": repo, "releasesUrl": f"https://github.com/{repo}/releases",
+            "generated": gen, "allVersions": {"total": all_total, "platforms": all_per},
+            "recent": recent, "versions": versions, "daily": daily}
+
+
 def render_markdown(summary, repo, generated):
     """The last few versions' numbers as GitHub-flavoured markdown."""
     def cell(s):
@@ -471,6 +508,7 @@ def main():
     ap.add_argument("--map", default=os.path.join(HERE, "asset-types.json"))
     ap.add_argument("--out", default=os.path.join(HERE, "output", "index.html"))
     ap.add_argument("--md", default=os.path.join(HERE, "STATS.md"))
+    ap.add_argument("--json", default=None, help="stats.json path (default: next to --out)")
     ap.add_argument("--data-dir", default=os.path.join(HERE, "data"))
     args = ap.parse_args()
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -482,9 +520,12 @@ def main():
         cur = current_version(summary["versions"])
         history = load_history(args.data_dir, cur["tag"], load_rules(args.map)) if cur else []
         f.write(render(summary, args.repo, now, history))
+    json_path = args.json or os.path.join(os.path.dirname(os.path.abspath(args.out)), "stats.json")
+    with open(json_path, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(render_data(summary, args.repo, now, history), f, indent=1)
     with open(args.md, "w", encoding="utf-8", newline="\n") as f:
         f.write(render_markdown(summary, args.repo, now.strftime("%Y-%m-%d %H:%M UTC")))
-    print(f"snapshot: {snap}\npage: {args.out}\nmarkdown: {args.md}\ntotal downloads: {summary['total']}")
+    print(f"snapshot: {snap}\npage: {args.out}\ndata: {json_path}\nmarkdown: {args.md}\ntotal downloads: {summary['total']}")
     for t in summary["types"]:
         print(f"  {t['type']}: {t['downloads']}")
     unk = sorted({f["name"] for v in summary["versions"] for f in v["files"] if f["type"] == UNCLASSIFIED})

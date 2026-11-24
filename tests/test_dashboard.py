@@ -143,6 +143,33 @@ class Tests(unittest.TestCase):
                 snap = json.load(f)
             self.assertEqual(snap["releases"][1]["assets"][0]["download_count"], 5)
 
+    def test_data(self):
+        now = datetime.datetime(2026, 11, 12, 0, 32, tzinfo=datetime.timezone.utc)
+        s = dashboard.summarize(FIXTURE, RULES)
+        data = dashboard.render_data(s, "o/r", now)
+        json.dumps(data)  # serialisable
+        self.assertEqual(data["schema"], 1)
+        self.assertEqual(data["generated"], "2026-11-12T00:32:00Z")
+        self.assertEqual(data["releasesUrl"], "https://github.com/o/r/releases")
+        self.assertEqual(data["allVersions"], {"total": 26, "platforms": {"Windows": 22, "Linux": 4}})
+        self.assertEqual([v["tag"] for v in data["versions"]], ["v1.1", "v1.0"])
+        cur = data["versions"][0]
+        self.assertEqual(cur["downloads"], 16)
+        win = cur["platforms"]["Windows"]
+        self.assertEqual((win["downloads"], win["updates"], win["checks"]), (12, 1, 20))
+        self.assertEqual(win["parts"], [{"label": "Installer", "count": 7}, {"label": "Zip", "count": 5}])
+        self.assertEqual(cur["platforms"]["Linux"]["updateParts"], [{"label": "Full", "count": 2}])
+        self.assertEqual(cur["files"][0]["name"], "releases.win.json")
+        self.assertEqual((cur["files"][0]["size"], cur["files"][0]["downloads"]), (100, 20))
+        self.assertEqual(data["recent"], {"Windows": None, "Linux": None})
+        self.assertEqual(data["daily"], [])
+        with tempfile.TemporaryDirectory() as d:
+            self._history(d)
+            data = dashboard.render_data(s, "o/r", now, dashboard.load_history(d, "v1", RULES))
+        self.assertEqual(data["daily"], [{"date": "2026-03-05", "count": 7}, {"date": "2026-03-06", "count": 5}])
+        self.assertEqual(data["recent"]["Windows"], {"count": 10, "label": "since Mar 4"})
+        self.assertEqual(dashboard.render_data(dashboard.summarize([], RULES), "o/r", now)["versions"], [])
+
     def test_sizes_and_names(self):
         self.assertEqual(dashboard.mb(0), "0 KB")
         self.assertEqual(dashboard.mb(209), "0 KB")
