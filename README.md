@@ -1,7 +1,9 @@
 # download-stats
 
-Live page: https://frightworks.github.io/download-stats/ \nIn-repo view: [STATS.md](STATS.md)
-Download stats for FrightWorks releases, per file and per version
+Download stats for FrightWorks releases, per file and per version.
+
+Live page: https://frightworks.dev/stats/ (drawn by the site from this repo's `stats.json`). In-repo view:
+[STATS.md](STATS.md).
 
 
 ## Run
@@ -21,13 +23,11 @@ Regenerated on every run:
 
 - `STATS.md` (committed): a table of the last 5 published versions (Windows and Linux downloads, update files and
   update checks each), plus the current version's files with description, size and downloads, and a "last updated" UTC time.
-- `output/index.html` (git-ignored, published to GitHub Pages by the workflow): a friendly self-contained page
-  (last-updated time in Central time, tiles, downloads-per-version bars split Windows / Linux, collapsible per-version
-  details for the last 5 versions, and new downloads per day for the current version from `data/`; no scripts, no external
-  requests). Pages hosts it, so it isn't committed.
+- `output/index.html` (git-ignored, published to GitHub Pages by the workflow): a redirect from
+  https://frightworks.github.io/download-stats/ to https://frightworks.dev/stats/, which draws the page.
   "Downloads" = Windows installer + zip, or the Linux AppImage (GitHub counts requests, not people). "Update files" =
   that version's own `.nupkg` packages. "Update checks" = the busiest update-feed file (`releases.*.json`, `RELEASES*`).
-- `output/stats.json` (git-ignored, published next to the page): the same numbers as the page, as JSON
+- `output/stats.json` (git-ignored, published to GitHub Pages): the numbers for https://frightworks.dev/stats/, as JSON
   (`schema` 1; versions, per-platform numbers, the all-versions total, the 7-day change, new downloads per day).
   https://frightworks.dev/stats/ reads it at build time, so keep existing fields stable and bump `DATA_SCHEMA` in
   `dashboard.py` if one has to change meaning or go away.
