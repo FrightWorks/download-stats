@@ -1,6 +1,6 @@
 # Download stats: FrightWorks/FrightWorks-no100f
 
-Current version **v1.1.3** (released 2026-11-10). Last updated 2026-11-24 05:31 UTC.
+Current version **v1.1.3** (released 2026-11-10). Last updated 2026-11-24 05:35 UTC.
 
 Downloads = installer + zip (Windows) or AppImage (Linux); GitHub counts requests, not unique people. Update files = a version's update packages fetched by the in-app updater. Update checks = the busiest update-feed file, a rough sign of installs in use.
 
