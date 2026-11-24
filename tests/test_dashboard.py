@@ -73,16 +73,15 @@ class Tests(unittest.TestCase):
         rels.append({"tag_name": "v9", "draft": True, "published_at": "2026-01-09T00:00:00Z", "assets": []})
         shown = dashboard.shown_versions(dashboard.summarize(rels, RULES)["versions"])
         self.assertEqual([v["tag"] for v in shown], ["v8", "v7", "v6", "v5", "v4"])
-        page = dashboard.render(dashboard.summarize(rels, RULES), "o/r", "now")
-        self.assertNotIn("v3", page)
-        self.assertNotIn("v9", page)
+        data = dashboard.render_data(dashboard.summarize(rels, RULES), "o/r", "now")
+        self.assertEqual([v["tag"] for v in data["versions"]], ["v8", "v7", "v6", "v5", "v4"])
 
     def test_central_time(self):
         utc = datetime.timezone.utc
-        self.assertEqual(dashboard.format_central(datetime.datetime(2026, 11, 12, 0, 32, tzinfo=utc)),
-                         "Nov 11, 2026, 6:32 PM CST")
-        self.assertEqual(dashboard.format_central(datetime.datetime(2026, 7, 1, 17, 5, tzinfo=utc)),
-                         "Jul 1, 2026, 12:05 PM CDT")
+        self.assertEqual(dashboard.central_time(datetime.datetime(2026, 11, 12, 0, 32, tzinfo=utc)),
+                         (datetime.datetime(2026, 11, 11, 18, 32), "CST"))
+        self.assertEqual(dashboard.central_time(datetime.datetime(2026, 7, 1, 17, 5, tzinfo=utc)),
+                         (datetime.datetime(2026, 7, 1, 12, 5), "CDT"))
         # DST ends Sun 2026-11-01 at 07:00 UTC
         self.assertEqual(dashboard.central_time(datetime.datetime(2026, 11, 1, 6, 59, tzinfo=utc))[1], "CDT")
         self.assertEqual(dashboard.central_time(datetime.datetime(2026, 11, 1, 7, 0, tzinfo=utc))[1], "CST")
@@ -114,27 +113,13 @@ class Tests(unittest.TestCase):
             self.assertEqual(dashboard.recent_change(h, "Windows", days=1), (8, "last 1 days"))
             self.assertIsNone(dashboard.recent_change(h[:1], "Windows"))
 
-    def test_render_and_snapshot(self):
-        now = datetime.datetime(2026, 11, 12, 0, 32, tzinfo=datetime.timezone.utc)
-        s = dashboard.summarize(FIXTURE, RULES)
-        page = dashboard.render(s, "o/r", now)
-        for text in ("Latest version", "Windows downloads", "Linux downloads", "All versions: <b>26</b> downloads (Windows 22 &middot; Linux 4)", "Installer 7", "mystery.<wbr>bin",
-                     "6:32 PM CST", "github.com/o/r/releases", "chart appears once snapshots span",
-                     "prefers-color-scheme:dark"):
-            self.assertIn(text, page)
-        self.assertEqual(page.count("<details"), 2)  # one per version
-        self.assertEqual(page.count("<details open>"), 1)
+    def test_redirect(self):
+        page = dashboard.render_redirect()
+        self.assertIn('content="0; url=https://frightworks.dev/stats/"', page)
+        self.assertIn('rel="canonical" href="https://frightworks.dev/stats/"', page)
         self.assertNotIn("<script", page)
-        self.assertNotIn("<rect", page)
-        for bad in ("src=", "@import", "url("):
-            self.assertNotIn(bad, page)
-        with tempfile.TemporaryDirectory() as d:
-            self._history(d)
-            page = dashboard.render(s, "o/r", now, dashboard.load_history(d, "v1", RULES))
-        self.assertIn("<rect", page)
-        self.assertIn('class="val"', page)  # number on each bar
-        self.assertIn('data-tip="v1.1 Windows: 12"', page)  # hover text on the per-version bars
-        self.assertNotIn("chart appears once", page)
+
+    def test_snapshot(self):
         with tempfile.TemporaryDirectory() as d:
             now = datetime.datetime(2026, 3, 4, 5, 6, 7, tzinfo=datetime.timezone.utc)
             path = dashboard.save_snapshot(FIXTURE, "o/r", d, now)
@@ -169,17 +154,6 @@ class Tests(unittest.TestCase):
         self.assertEqual(data["daily"], [{"date": "2026-03-05", "count": 7}, {"date": "2026-03-06", "count": 5}])
         self.assertEqual(data["recent"]["Windows"], {"count": 10, "label": "since Mar 4"})
         self.assertEqual(dashboard.render_data(dashboard.summarize([], RULES), "o/r", now)["versions"], [])
-
-    def test_sizes_and_names(self):
-        self.assertEqual(dashboard.mb(0), "0 KB")
-        self.assertEqual(dashboard.mb(209), "0 KB")
-        self.assertEqual(dashboard.mb(4096), "4 KB")
-        self.assertEqual(dashboard.mb(1048575), "1,024 KB")
-        self.assertEqual(dashboard.mb(1048576), "1.0 MB")
-        self.assertEqual(dashboard.mb(688655610), "656.8 MB")
-        self.assertEqual(dashboard.break_name("FrightWorks-win-Setup.exe"),
-                         "FrightWorks-<wbr>win-<wbr>Setup.<wbr>exe")
-        self.assertEqual(dashboard.break_name("a<b>.zip"), "a&lt;b&gt;.<wbr>zip")
 
     def test_markdown(self):
         md = dashboard.render_markdown(dashboard.summarize(FIXTURE, RULES), "o/r", "2026-03-04 05:06 UTC")
