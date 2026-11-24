@@ -25,12 +25,12 @@ Regenerated on every run:
   update checks each), plus the current version's files with description, size and downloads, and a "last updated" UTC time.
 - `output/index.html` (git-ignored, published to GitHub Pages by the workflow): a redirect from
   https://frightworks.github.io/download-stats/ to https://frightworks.dev/stats/, which draws the page.
-  "Downloads" = Windows installer + zip, or the Linux AppImage (GitHub counts requests, not people). "Update files" =
-  that version's own `.nupkg` packages. "Update checks" = the busiest update-feed file (`releases.*.json`, `RELEASES*`).
 - `output/stats.json` (git-ignored, published to GitHub Pages): the numbers for https://frightworks.dev/stats/, as JSON
   (`schema` 1; versions, per-platform numbers, the all-versions total, the 7-day change, new downloads per day).
   https://frightworks.dev/stats/ reads it at build time, so keep existing fields stable and bump `DATA_SCHEMA` in
   `dashboard.py` if one has to change meaning or go away.
+  "Downloads" = Windows installer + zip, or the Linux AppImage (GitHub counts requests, not people). "Update files" =
+  that version's own `.nupkg` packages. "Update checks" = the busiest update-feed file (`releases.*.json`, `RELEASES*`).
 - `data/<UTC timestamp>.json` (committed): raw per-asset counts from each run. One file per run (the name includes
   the time, so twice a day never collides). GitHub only reports cumulative counts, so these are the history for trends later.
 
