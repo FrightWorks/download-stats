@@ -1,0 +1,50 @@
+name: release-watch
+
+# Starts the stats workflow soon after a new FrightWorks-no100f release, instead of waiting for the next
+# 03:00/15:00 run. No100f releases are made by hand and that repo sends no dispatch, so this polls: if the
+# newest release's tag isn't in the published stats.json yet, run stats.yml (which then asks the site to rebuild).
+
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write   # gh workflow run, same repo
+  contents: read
+
+concurrency:
+  group: release-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start stats.yml if a release is missing from stats.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_REPO: FrightWorks/FrightWorks-no100f
+          STATS_URL: https://frightworks.github.io/download-stats/stats.json
+        run: |
+          latest=$(gh api "repos/$SOURCE_REPO/releases?per_page=1" --jq '.[0].tag_name // empty')
+          if [ -z "$latest" ]; then
+            echo "No releases in $SOURCE_REPO."
+            exit 0
+          fi
+          if ! published=$(curl -fsS "$STATS_URL" | jq -r '.versions[].tag'); then
+            echo "::warning::Couldn't read $STATS_URL; leaving it to the scheduled stats run."
+            exit 0
+          fi
+          if grep -qxF "$latest" <<<"$published"; then
+            echo "$latest is already in stats.json."
+            exit 0
+          fi
+          pending=$(gh run list --workflow stats.yml --limit 5 --json status --jq '[.[] | select(.status != "completed")] | length')
+          if [ "$pending" -gt 0 ]; then
+            echo "$latest is missing from stats.json, but a stats run is already queued or running."
+            exit 0
+          fi
+          echo "$latest is missing from stats.json; starting stats.yml."
+          gh workflow run stats.yml --ref "${{ github.event.repository.default_branch }}"
