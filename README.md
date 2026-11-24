@@ -45,6 +45,12 @@ which GitHub documents; it follows daylight saving). It runs the tests and `dash
 github-actions[bot] (those commits also keep the schedule from going idle on a public repo), then deploys `output/` to
 GitHub Pages (repo setting: Pages source = GitHub Actions). Run it by hand from the Actions tab ("Run workflow").
 
+`.github/workflows/release-watch.yml` runs every 30 minutes (GitHub often starts scheduled runs late). If the newest
+FrightWorks-no100f release isn't in the published `stats.json` yet and no stats run is queued or running, it starts
+`stats.yml` (same repo, so the built-in token is enough). No100f releases are made by hand and that repo sends no
+dispatch, which is why this polls. The site checks every 30 minutes whether `stats.json` changed and rebuilds if so,
+so a new release reaches https://frightworks.dev/stats/ within about an hour, with no token in either direction.
+
 ## Editing the file descriptions
 
 `asset-types.json` maps an asset name pattern (`fnmatch` wildcards, case-insensitive) to a `type` (the rollup label)
