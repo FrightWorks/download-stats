@@ -32,6 +32,9 @@ class Tests(unittest.TestCase):
     def test_classify(self):
         c = lambda n: dashboard.classify(n, RULES)[0]
         self.assertEqual(c("FrightWorks-9.9.zip"), "Windows zip")
+        self.assertEqual(c("FrightWorks-1.3.0-Windows-x64.zip"), "Windows zip")
+        self.assertEqual(c("FrightWorks-1.3.0-Linux-x64.tar.gz"), "Linux tarball")
+        self.assertEqual(dashboard.TYPE_KINDS["Linux tarball"], ("Linux", "player"))
         self.assertEqual(c("FrightWorks-1.1-linux-full.nupkg"), "Linux update package")
         self.assertEqual(c("FrightWorks-1.1-full.nupkg"), "Windows update package")
         self.assertEqual(c("RELEASES-linux"), "Linux update feed")

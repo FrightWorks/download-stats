@@ -3,6 +3,7 @@
   "rules": [
     {"pattern": "FrightWorks-win-Setup.exe", "type": "Windows installer", "description": "Windows installer (Velopack Setup.exe). What most Windows players download; installs and auto-updates."},
     {"pattern": "FrightWorks-*.zip", "type": "Windows zip", "description": "Windows portable zip, x64. Unzip and run; no installer or auto-update."},
+    {"pattern": "FrightWorks-*-Linux-x64.tar.gz", "type": "Linux tarball", "description": "Linux portable build, x64 (tar.gz). The folder RecompLauncher installs."},
     {"pattern": "FrightWorks.AppImage", "type": "Linux AppImage", "description": "Linux AppImage (beta). What Linux players download; auto-updates."},
     {"pattern": "*-linux-delta.nupkg", "type": "Linux update package", "description": "Linux incremental update package, fetched by the installed AppImage updater."},
     {"pattern": "*-linux-full.nupkg", "type": "Linux update package", "description": "Linux full update package, fetched by the installed AppImage updater."},
