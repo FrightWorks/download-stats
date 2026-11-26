@@ -95,9 +95,11 @@ def human_size(n):
 TYPE_KINDS = {
     "Windows installer": ("Windows", "player"), "Windows zip": ("Windows", "player"),
     "Windows update package": ("Windows", "update"),
-    "Linux AppImage": ("Linux", "player"), "Linux update package": ("Linux", "update"),
+    "Linux AppImage": ("Linux", "player"), "Linux tarball": ("Linux", "player"),
+    "Linux update package": ("Linux", "update"),
 }
-PLAYER_LABELS = {"Windows installer": "Installer", "Windows zip": "Zip", "Linux AppImage": "AppImage"}
+PLAYER_LABELS = {"Windows installer": "Installer", "Windows zip": "Zip", "Linux AppImage": "AppImage",
+                 "Linux tarball": "Tarball"}
 PLATFORMS = ("Windows", "Linux")
 VERSION_LIMIT = 5  # how many versions the page and STATS.md show
 
@@ -126,7 +128,7 @@ def platform_stats(version):
     """Per-platform numbers for one version.
 
     {platform: {"downloads", "parts": [(label, n)], "updates", "update_parts": [(label, n)], "checks"}}
-    downloads = installer + zip (Windows) or AppImage (Linux) combined. updates = downloads of this version's own
+    downloads = installer + zip (Windows) or AppImage + tarball (Linux) combined. updates = downloads of this version's own
     update packages (a release also carries the previous version's full package; that one is skipped).
     checks = the busiest update-feed file, i.e. roughly how often installed copies looked for an update.
     """
@@ -229,7 +231,7 @@ DAILY_DAYS = 14  # most recent days of new downloads in stats.json
 
 
 def all_versions_total(versions):
-    """(total, {platform: downloads}) of installer/zip/AppImage downloads over every published version."""
+    """(total, {platform: downloads}) of installer/zip/AppImage/tarball downloads over every published version."""
     per = {p: 0 for p in PLATFORMS}
     for v in versions:
         if not v["draft"]:
@@ -298,7 +300,7 @@ def render_markdown(summary, repo, generated):
         return "\n".join(out + ["No releases yet.", ""])
     cur = shown[0]
     out += [f"Current version **{cur['tag']}** (released {cur['date']}). Last updated {generated}.", "",
-            "Downloads = installer + zip (Windows) or AppImage (Linux); GitHub counts requests, not unique people. "
+            "Downloads = installer + zip (Windows) or AppImage + tarball (Linux); GitHub counts requests, not unique people. "
             "Update files = a version's update packages fetched by the in-app updater. Update checks = the "
             "busiest update-feed file, a rough sign of installs in use.", "",
             f"## Last {len(shown)} versions", "",
