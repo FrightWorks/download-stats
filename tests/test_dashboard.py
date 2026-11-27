@@ -95,9 +95,12 @@ class Tests(unittest.TestCase):
         for stamp, zip_n, linux_n in (("2026-03-05T200000Z", 9, 3), ("2026-03-04T200000Z", 4, 1),
                                       ("2026-03-04T080000Z", 2, 1), ("2026-03-06T060000Z", 12, 5)):
             now = datetime.datetime.strptime(stamp, "%Y-%m-%dT%H%M%SZ").replace(tzinfo=datetime.timezone.utc)
-            rels = [{"tag_name": "v1", "assets": [asset("FrightWorks-1.zip", zip_n), asset("RELEASES", 1),
-                                                  asset("FrightWorks.AppImage", linux_n)]},
-                    {"tag_name": "v0", "assets": [asset("FrightWorks-0.zip", 50)]}]
+            rels = [{"tag_name": "v1", "published_at": "2026-03-05T18:00:00Z",
+                     "assets": [asset("FrightWorks-1.zip", zip_n), asset("RELEASES", 1),
+                                asset("FrightWorks.AppImage", linux_n)]},
+                    {"tag_name": "v0", "published_at": "2026-02-01T00:00:00Z",
+                     "assets": [asset("FrightWorks-0.zip", 50 + zip_n)]},
+                    {"tag_name": "draft", "published_at": None, "assets": [asset("FrightWorks-2.zip", 99)]}]
             dashboard.save_snapshot(rels, "o/r", d, now)
         with open(os.path.join(d, "junk.json"), "w") as f:
             f.write("{")
@@ -115,6 +118,18 @@ class Tests(unittest.TestCase):
             self.assertEqual(dashboard.recent_change(h, "Windows"), (10, "since Mar 4"))
             self.assertEqual(dashboard.recent_change(h, "Windows", days=1), (8, "last 1 days"))
             self.assertIsNone(dashboard.recent_change(h[:1], "Windows"))
+            # every published release: v1 as above plus v0 (50 + zip each time); the draft is left out
+            a = dashboard.load_all_history(d, RULES)
+            self.assertEqual([st["Windows"]["downloads"] for _, st in a], [54, 58, 68, 74])
+            self.assertEqual(dashboard.daily_new(a), [(datetime.date(2026, 3, 5), 12), (datetime.date(2026, 3, 6), 8)])
+
+    def test_release_days(self):
+        s = dashboard.summarize(FIXTURE + [
+            {"tag_name": "v1.2", "published_at": "2026-02-02T03:00:00Z", "assets": []},  # Feb 1, 9 pm Central
+            {"tag_name": "wip", "draft": True, "published_at": None, "assets": []}], RULES)
+        self.assertEqual(dashboard.release_days(s["versions"]),
+                         {datetime.date(2025, 12, 31): ["v1.0"], datetime.date(2026, 1, 31): ["v1.1"],
+                          datetime.date(2026, 2, 1): ["v1.2"]})
 
     def test_redirect(self):
         page = dashboard.render_redirect()
@@ -150,11 +165,16 @@ class Tests(unittest.TestCase):
         self.assertEqual(cur["files"][0]["name"], "releases.win.json")
         self.assertEqual((cur["files"][0]["size"], cur["files"][0]["downloads"]), (100, 20))
         self.assertEqual(data["recent"], {"Windows": None, "Linux": None})
-        self.assertEqual(data["daily"], [])
+        self.assertEqual((data["daily"], data["dailyAll"]), ([], []))
         with tempfile.TemporaryDirectory() as d:
             self._history(d)
-            data = dashboard.render_data(s, "o/r", now, dashboard.load_history(d, "v1", RULES))
+            s3 = dashboard.summarize(FIXTURE + [{"tag_name": "v1.2", "published_at": "2026-03-05T18:00:00Z",
+                                                 "assets": []}], RULES)
+            data = dashboard.render_data(s3, "o/r", now, dashboard.load_history(d, "v1", RULES),
+                                         dashboard.load_all_history(d, RULES))
         self.assertEqual(data["daily"], [{"date": "2026-03-05", "count": 7}, {"date": "2026-03-06", "count": 5}])
+        self.assertEqual(data["dailyAll"], [{"date": "2026-03-05", "count": 12, "releases": ["v1.2"]},
+                                            {"date": "2026-03-06", "count": 8, "releases": []}])
         self.assertEqual(data["recent"]["Windows"], {"count": 10, "label": "since Mar 4"})
         self.assertEqual(dashboard.render_data(dashboard.summarize([], RULES), "o/r", now)["versions"], [])
 

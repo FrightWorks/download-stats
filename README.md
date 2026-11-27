@@ -28,7 +28,8 @@ the REST API is used even if `gh` is installed). Options: `--repo OWNER/NAME`, `
 ## Output
 
 - `stats.json`: the numbers for https://frightworks.dev/stats/ (`schema` 1; versions, per-platform numbers, the
-  all-versions total, the 7-day change, new downloads per day). The page reads it at build time (the fallback) and in
+  all-versions total, the 7-day change, new downloads per day: `daily` for the current version, `dailyAll` for every
+  published version with the tags released each day, by US Central date). The page reads it at build time (the fallback) and in
   the browser when it opens, so keep existing fields stable and bump `DATA_SCHEMA` in `dashboard.py` if one has to
   change meaning or go away.
   "Downloads" = Windows installer + zip, or the Linux AppImage + tarball (GitHub counts requests, not people). "Update files" =
