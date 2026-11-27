@@ -108,6 +108,7 @@ def summarize(releases, rules):
         versions.append({
             "tag": rel["tag_name"],
             "date": (rel.get("published_at") or rel.get("created_at") or "")[:10],
+            "published": rel.get("published_at"),
             "draft": bool(rel.get("draft")), "prerelease": bool(rel.get("prerelease")),
             "downloads": sum(f["downloads"] for f in files), "files": files})
     versions.sort(key=lambda v: v["date"], reverse=True)
@@ -235,6 +236,49 @@ def load_history(data_dir, tag, rules):
     return points
 
 
+def load_all_history(data_dir, rules):
+    """[(taken_at ISO string, {platform: {"downloads"}})] summed over every published release, oldest first.
+
+    Same shape as load_history, so daily_new works on it. Drafts (no published_at) are left out.
+    """
+    points = []
+    if os.path.isdir(data_dir):
+        for name in sorted(os.listdir(data_dir)):
+            if not name.endswith(".json"):
+                continue
+            try:
+                with open(os.path.join(data_dir, name), encoding="utf-8") as f:
+                    snap = json.load(f)
+                parse_utc(snap["taken_at"])
+                total = {p: {"downloads": 0} for p in PLATFORMS}
+                for r in snap["releases"]:
+                    if not r.get("published_at"):
+                        continue
+                    files = [{"name": a["name"], "downloads": a["download_count"],
+                              "type": classify(a["name"], rules)[0]} for a in r["assets"]]
+                    for p, st in platform_stats({"tag": r["tag"], "files": files}).items():
+                        total[p]["downloads"] += st["downloads"]
+                points.append((snap["taken_at"], total))
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+    points.sort(key=lambda p: p[0])
+    return points
+
+
+def release_days(versions):
+    """{Central date: [tags published that day, oldest first]} for every published version."""
+    days = {}
+    for v in sorted(versions, key=lambda v: v.get("published") or ""):
+        if v["draft"] or not v.get("published"):
+            continue
+        try:
+            d = central_time(parse_utc(v["published"]))[0].date()
+        except ValueError:
+            continue
+        days.setdefault(d, []).append(v["tag"])
+    return days
+
+
 def recent_change(history, platform, days=7):
     """(new player downloads, label) over the last `days`, or None with fewer than two snapshots.
 
@@ -291,11 +335,12 @@ def render_redirect(url=SITE_STATS_URL):
 DATA_SCHEMA = 1  # bump when a field in stats.json changes meaning or is removed
 
 
-def render_data(summary, repo, generated, history=None):
+def render_data(summary, repo, generated, history=None, all_history=None):
     """The numbers the page shows, as a dict for stats.json (read by frightworks.dev/stats/ at build time).
 
     Same rules as the page: the last VERSION_LIMIT published versions (current first), per-platform numbers,
-    the all-versions total, the 7-day change and the last DAILY_DAYS days of new downloads for the current version.
+    the all-versions total, the 7-day change and the last DAILY_DAYS days of new downloads: `daily` for the
+    current version (kept for older pages), `dailyAll` for every published version, with the tags released each day.
     """
     history = history or []
     shown = shown_versions(summary["versions"])
@@ -319,10 +364,13 @@ def render_data(summary, repo, generated, history=None):
         r = recent_change(history, p) if shown else None
         recent[p] = {"count": r[0], "label": r[1]} if r else None
     daily = [{"date": d.isoformat(), "count": n} for d, n in daily_new(history)[-DAILY_DAYS:]] if shown else []
+    released = release_days(summary["versions"])
+    daily_all = [{"date": d.isoformat(), "count": n, "releases": released.get(d, [])}
+                 for d, n in daily_new(all_history or [])[-DAILY_DAYS:]]
     gen = generated.strftime("%Y-%m-%dT%H:%M:%SZ") if isinstance(generated, datetime.datetime) else str(generated)
     return {"schema": DATA_SCHEMA, "repo": repo, "releasesUrl": f"https://github.com/{repo}/releases",
             "generated": gen, "allVersions": {"total": all_total, "platforms": all_per},
-            "recent": recent, "versions": versions, "daily": daily}
+            "recent": recent, "versions": versions, "daily": daily, "dailyAll": daily_all}
 
 
 def render_markdown(summary, repo, generated):
@@ -432,7 +480,8 @@ def main():
     if args.out:
         write_atomic(args.out, render_redirect())
     json_path = args.json or os.path.join(os.path.dirname(os.path.abspath(args.out)), "stats.json")
-    write_atomic(json_path, json.dumps(render_data(summary, args.repo, now, history), indent=1))
+    all_history = load_all_history(args.data_dir, load_rules(args.map))
+    write_atomic(json_path, json.dumps(render_data(summary, args.repo, now, history, all_history), indent=1))
     if args.md:
         write_atomic(args.md, render_markdown(summary, args.repo, now.strftime("%Y-%m-%d %H:%M UTC")))
     print(f"snapshot: {snap}\nredirect: {args.out or '-'}\ndata: {json_path}\nmarkdown: {args.md or '-'}\n"
