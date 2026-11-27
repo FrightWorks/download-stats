@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Collect download counts for a GitHub repo's releases: a snapshot in data/, STATS.md and stats.json.
+"""Collect download counts for a GitHub repo's releases: a snapshot in data/, stats.json and STATS.md.
 
-frightworks.dev/stats/ draws the page from stats.json; the Pages site here only redirects there.
+The FrightWorks web server runs this every 5 minutes; frightworks.dev/stats/ draws the page from its stats.json.
 Standard library only. Usage: python dashboard.py [--repo OWNER/NAME] [--out PATH]
 """
 import argparse
@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -20,27 +21,61 @@ DEFAULT_REPO = "FrightWorks/FrightWorks-no100f"
 UNCLASSIFIED = "unclassified"
 
 
-def fetch_releases(repo):
-    """All releases with assets: via gh if present, else the REST API (GITHUB_TOKEN optional)."""
-    if shutil.which("gh"):
+def fetch_releases(repo, cache=None):
+    """All releases with assets: via gh if present (and no GITHUB_TOKEN is set), else the REST API.
+
+    With `cache` (a file path, REST API only), the first page is requested conditionally with the ETag of the last
+    answer. GitHub answers 304 Not Modified when nothing changed, and an authorized 304 doesn't count against the
+    rate limit; the releases then come from the cache. Only a single-page answer is cached.
+    """
+    token = os.environ.get("GITHUB_TOKEN")
+    if shutil.which("gh") and not token and not cache:
         out = subprocess.run(
             ["gh", "api", "--paginate", "--slurp", f"repos/{repo}/releases?per_page=100"],
             capture_output=True, text=True, check=True).stdout
         return [r for page in json.loads(out) for r in page]
+    cached = None
+    if cache:
+        try:
+            with open(cache, encoding="utf-8") as f:
+                cached = json.load(f)
+            if cached.get("repo") != repo or not cached.get("etag"):
+                cached = None
+        except (OSError, ValueError):
+            cached = None
     releases, page = [], 1
     while True:
         req = urllib.request.Request(
             f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}",
-            headers={"Accept": "application/vnd.github+json"})
-        token = os.environ.get("GITHUB_TOKEN")
+            headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28",
+                     "User-Agent": "frightworks-download-stats"})
         if token:
             req.add_header("Authorization", f"Bearer {token}")
-        with urllib.request.urlopen(req) as resp:
-            batch = json.load(resp)
+        if page == 1 and cached:
+            req.add_header("If-None-Match", cached["etag"])
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                batch = json.load(resp)
+                etag = resp.headers.get("ETag")
+        except urllib.error.HTTPError as e:
+            if e.code == 304 and page == 1 and cached:
+                return cached["releases"]
+            raise
         releases += batch
         if len(batch) < 100:
+            if cache and page == 1 and etag:
+                write_atomic(cache, json.dumps({"repo": repo, "etag": etag, "releases": batch}))
             return releases
         page += 1
+
+
+def write_atomic(path, text):
+    """Write `text` to `path` via a temporary file and a rename, so readers never see half a file."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    os.replace(tmp, path)
 
 
 def load_rules(path):
@@ -331,30 +366,77 @@ def save_snapshot(releases, repo, data_dir, now):
     return path
 
 
+SNAPSHOT_FORMAT = "%Y-%m-%dT%H%M%SZ.json"
+KEEP_ALL = datetime.timedelta(days=2)
+KEEP_HOURLY = datetime.timedelta(days=30)
+
+
+def prune_snapshots(data_dir, now):
+    """Thin out frequent snapshots; returns the file names removed.
+
+    Keeps every snapshot from the last KEEP_ALL, then the last one of each UTC hour up to KEEP_HOURLY old, then
+    the last one of each US Central day (what daily_new and recent_change need). The newest file always stays.
+    Files whose name isn't a snapshot timestamp are left alone.
+    """
+    snaps = []
+    for name in os.listdir(data_dir) if os.path.isdir(data_dir) else []:
+        try:
+            t = datetime.datetime.strptime(name, SNAPSHOT_FORMAT).replace(tzinfo=datetime.timezone.utc)
+        except ValueError:
+            continue
+        snaps.append((t, name))
+    snaps.sort()
+    keep_bucket = {}  # bucket -> newest name in it
+    for t, name in snaps:
+        age = now - t
+        if age <= KEEP_ALL:
+            bucket = name
+        elif age <= KEEP_HOURLY:
+            bucket = ("hour", t.strftime("%Y-%m-%dT%H"))
+        else:
+            bucket = ("day", central_time(t)[0].date().isoformat())
+        keep_bucket[bucket] = name  # sorted, so the last one wins
+    keep = set(keep_bucket.values())
+    if snaps:
+        keep.add(snaps[-1][1])
+    removed = [name for _, name in snaps if name not in keep]
+    for name in removed:
+        os.remove(os.path.join(data_dir, name))
+    return removed
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--repo", default=DEFAULT_REPO)
     ap.add_argument("--map", default=os.path.join(HERE, "asset-types.json"))
-    ap.add_argument("--out", default=os.path.join(HERE, "output", "index.html"))
-    ap.add_argument("--md", default=os.path.join(HERE, "STATS.md"))
+    ap.add_argument("--out", default=os.path.join(HERE, "output", "index.html"),
+                    help="redirect page path; empty to skip it (then --json is required)")
+    ap.add_argument("--md", default=os.path.join(HERE, "STATS.md"), help="markdown table path; empty to skip it")
     ap.add_argument("--json", default=None, help="stats.json path (default: next to --out)")
     ap.add_argument("--data-dir", default=os.path.join(HERE, "data"))
+    ap.add_argument("--cache", default=None, help="file for the last API answer and its ETag (conditional requests)")
+    ap.add_argument("--prune", action="store_true", help="thin out old snapshots (see prune_snapshots)")
     args = ap.parse_args()
+    if not args.out and not args.json:
+        ap.error("--json is required when --out is empty")
     now = datetime.datetime.now(datetime.timezone.utc)
-    releases = fetch_releases(args.repo)
+    releases = fetch_releases(args.repo, args.cache)
     snap = save_snapshot(releases, args.repo, args.data_dir, now)
+    if args.prune:
+        removed = prune_snapshots(args.data_dir, now)
+        if removed:
+            print(f"pruned {len(removed)} old snapshot(s)")
     summary = summarize(releases, load_rules(args.map))
-    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     cur = current_version(summary["versions"])
     history = load_history(args.data_dir, cur["tag"], load_rules(args.map)) if cur else []
-    with open(args.out, "w", encoding="utf-8", newline="\n") as f:
-        f.write(render_redirect())
+    if args.out:
+        write_atomic(args.out, render_redirect())
     json_path = args.json or os.path.join(os.path.dirname(os.path.abspath(args.out)), "stats.json")
-    with open(json_path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(render_data(summary, args.repo, now, history), f, indent=1)
-    with open(args.md, "w", encoding="utf-8", newline="\n") as f:
-        f.write(render_markdown(summary, args.repo, now.strftime("%Y-%m-%d %H:%M UTC")))
-    print(f"snapshot: {snap}\nredirect: {args.out}\ndata: {json_path}\nmarkdown: {args.md}\ntotal downloads: {summary['total']}")
+    write_atomic(json_path, json.dumps(render_data(summary, args.repo, now, history), indent=1))
+    if args.md:
+        write_atomic(args.md, render_markdown(summary, args.repo, now.strftime("%Y-%m-%d %H:%M UTC")))
+    print(f"snapshot: {snap}\nredirect: {args.out or '-'}\ndata: {json_path}\nmarkdown: {args.md or '-'}\n"
+          f"total downloads: {summary['total']}")
     for t in summary["types"]:
         print(f"  {t['type']}: {t['downloads']}")
     unk = sorted({f["name"] for v in summary["versions"] for f in v["files"] if f["type"] == UNCLASSIFIED})

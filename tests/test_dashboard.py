@@ -167,6 +167,73 @@ class Tests(unittest.TestCase):
         self.assertIn("| mystery.bin | unclassified | 100 B | 3 |", md)
         self.assertNotIn("\r", md)
 
+    def test_prune(self):
+        utc = datetime.timezone.utc
+        now = datetime.datetime(2026, 6, 30, 12, 0, tzinfo=utc)
+        times = [
+            now - datetime.timedelta(minutes=m) for m in (0, 5, 10)                      # recent: all kept
+        ] + [
+            datetime.datetime(2026, 6, 20, 9, m, tzinfo=utc) for m in (0, 5, 55)         # hourly: 9:55 kept
+        ] + [
+            datetime.datetime(2026, 6, 20, 10, 0, tzinfo=utc),                           # next hour: kept
+            # Older than 30 days: last of each Central day. May 1 23:00 and May 2 04:00 UTC are both May 1 CDT.
+            datetime.datetime(2026, 5, 1, 23, 0, tzinfo=utc),
+            datetime.datetime(2026, 5, 2, 4, 0, tzinfo=utc),
+            datetime.datetime(2026, 5, 2, 6, 0, tzinfo=utc),                             # May 2 CDT: kept
+        ]
+        with tempfile.TemporaryDirectory() as d:
+            for t in times:
+                open(os.path.join(d, t.strftime(dashboard.SNAPSHOT_FORMAT)), "w").close()
+            open(os.path.join(d, "notes.json"), "w").close()
+            removed = dashboard.prune_snapshots(d, now)
+            self.assertEqual(sorted(removed), ["2026-05-01T230000Z.json", "2026-06-20T090000Z.json",
+                                               "2026-06-20T090500Z.json"])
+            left = sorted(os.listdir(d))
+            self.assertIn("notes.json", left)
+            self.assertEqual(len(left), len(times) - 3 + 1)
+            self.assertEqual(dashboard.prune_snapshots(d, now), [])
+            # The newest file stays even when it's old.
+        with tempfile.TemporaryDirectory() as d:
+            for t in (datetime.datetime(2026, 1, 1, 1, tzinfo=utc), datetime.datetime(2026, 1, 1, 2, tzinfo=utc)):
+                open(os.path.join(d, t.strftime(dashboard.SNAPSHOT_FORMAT)), "w").close()
+            self.assertEqual(dashboard.prune_snapshots(d, now), ["2026-01-01T010000Z.json"])
+
+    def test_fetch_cache(self):
+        import io
+        import unittest.mock as mock
+        calls = []
+
+        class Resp(io.BytesIO):
+            def __init__(self, body, etag):
+                super().__init__(json.dumps(body).encode())
+                self.headers = {"ETag": etag}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake(req, timeout=None):
+            calls.append(dict(req.header_items()))
+            if req.get_header("If-none-match") == '"e1"':
+                raise dashboard.urllib.error.HTTPError(req.full_url, 304, "Not Modified", {}, None)
+            return Resp([{"tag_name": "v1", "assets": []}], '"e1"')
+
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(dashboard.urllib.request, "urlopen", fake), \
+                mock.patch.dict(os.environ, {"GITHUB_TOKEN": "t"}):
+            cache = os.path.join(d, "cache.json")
+            first = dashboard.fetch_releases("o/r", cache)
+            second = dashboard.fetch_releases("o/r", cache)
+            self.assertEqual(first, second)
+            self.assertEqual(first[0]["tag_name"], "v1")
+            self.assertNotIn("If-none-match", calls[0])
+            self.assertEqual(calls[1]["If-none-match"], '"e1"')
+            self.assertEqual(calls[1]["Authorization"], "Bearer t")
+            # A cache for another repo isn't used.
+            dashboard.fetch_releases("o/other", cache)
+            self.assertNotIn("If-none-match", calls[2])
+
 
 if __name__ == "__main__":
     unittest.main()
