@@ -50,8 +50,9 @@ On the FrightWorks web VM (set up from the `frightworks-infra` repo): a systemd 
 The snapshots live only on the VM since 2026-11-27. `data/` here holds the ones GitHub Actions collected before that
 (from 2026-11-12), which seeded the VM. The GitHub Actions workflows that collected them were retired at the same time.
 
-Changes to `dashboard.py` or `asset-types.json` reach the VM when they're installed again from `frightworks-infra`;
-it doesn't pull this repo by itself.
+Rule changes in `asset-types.json` reach the VM by themselves: it checks this file on `main` at most once an hour
+and uses it as long as it's valid and each rule's `type` is one the VM already knows. Changes to `dashboard.py`, or a
+rule with a new `type`, reach the VM when they're installed again from `frightworks-infra` (see its `docs/10-stats.md`).
 
 ## Editing the file descriptions
 
