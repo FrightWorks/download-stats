@@ -2,8 +2,8 @@
 
 Download stats for FrightWorks releases, per file and per version.
 
-Live page: https://frightworks.dev/stats/ (drawn by the site from this repo's `stats.json`). In-repo view:
-[STATS.md](STATS.md).
+Live page: https://frightworks.dev/stats/. It loads https://frightworks.dev/stats.json, which the FrightWorks web
+server regenerates from GitHub every 5 minutes with this repo's `dashboard.py`.
 
 
 ## Run
@@ -14,42 +14,44 @@ python -m unittest discover -s tests
 ```
 
 It lists every release of `FrightWorks/FrightWorks-no100f` with each asset's download count, using `gh api`
-if `gh` is installed and logged in, otherwise the unauthenticated REST API (set `GITHUB_TOKEN` to raise the rate limit).
-Options: `--repo OWNER/NAME`, `--out PATH`, `--map PATH`, `--data-dir PATH`.
+if `gh` is installed and logged in, otherwise the REST API (set `GITHUB_TOKEN` to raise the rate limit; when it's set,
+the REST API is used even if `gh` is installed). Options: `--repo OWNER/NAME`, `--out PATH`, `--md PATH`,
+`--json PATH`, `--map PATH`, `--data-dir PATH`, plus the two the server uses:
+
+- `--cache PATH`: keeps the last API answer and its ETag, and asks GitHub conditionally (`If-None-Match`). When
+  nothing changed GitHub answers 304 Not Modified, and an authorized 304 doesn't count against the rate limit.
+- `--prune`: thins out old snapshots: all of the last 2 days, then the last one of each UTC hour up to 30 days, then
+  the last one of each US Central day (enough for the 7-day change and the per-day chart).
+
+`--out ""` and `--md ""` skip the redirect page and the markdown table (`--json` is then required).
 
 ## Output
 
-Regenerated on every run:
-
-- `STATS.md` (committed): a table of the last 5 published versions (Windows and Linux downloads, update files and
-  update checks each), plus the current version's files with description, size and downloads, and a "last updated" UTC time.
-- `output/index.html` (git-ignored, published to GitHub Pages by the workflow): a redirect from
-  https://frightworks.github.io/download-stats/ to https://frightworks.dev/stats/, which draws the page.
-- `output/stats.json` (git-ignored, published to GitHub Pages): the numbers for https://frightworks.dev/stats/, as JSON
-  (`schema` 1; versions, per-platform numbers, the all-versions total, the 7-day change, new downloads per day).
-  https://frightworks.dev/stats/ reads it at build time, so keep existing fields stable and bump `DATA_SCHEMA` in
-  `dashboard.py` if one has to change meaning or go away.
+- `stats.json`: the numbers for https://frightworks.dev/stats/ (`schema` 1; versions, per-platform numbers, the
+  all-versions total, the 7-day change, new downloads per day). The page reads it at build time (the fallback) and in
+  the browser when it opens, so keep existing fields stable and bump `DATA_SCHEMA` in `dashboard.py` if one has to
+  change meaning or go away.
   "Downloads" = Windows installer + zip, or the Linux AppImage + tarball (GitHub counts requests, not people). "Update files" =
   that version's own `.nupkg` packages. "Update checks" = the busiest update-feed file (`releases.*.json`, `RELEASES*`).
-- `data/<UTC timestamp>.json` (committed): raw per-asset counts from each run. One file per run (the name includes
-  the time, so twice a day never collides). GitHub only reports cumulative counts, so these are the history for trends later.
+- `<data-dir>/<UTC timestamp>.json`: raw per-asset counts from each run. GitHub only reports cumulative counts, so these
+  snapshots are the history the 7-day change and the per-day chart come from.
+- `output/index.html` and `STATS.md` (local runs only, git-ignored): a redirect to the stats page, and a markdown table.
 
 Note: the `RELEASES`, `releases.*.json`, `assets.*.json` and `.nupkg` files are fetched by the in-app updater, so
 their counts reflect update checks and installs, not extra players.
 
-## Schedule
+## Where it runs
 
-`.github/workflows/stats.yml` runs at 03:00 and 15:00 America/Chicago (the `timezone` key on the `schedule` trigger,
-which GitHub documents; it follows daylight saving). It runs the tests and `dashboard.py` with the repo's own
-`GITHUB_TOKEN` (FrightWorks-no100f is public, so no extra secret), commits and pushes `STATS.md` and `data/` as
-github-actions[bot] (those commits also keep the schedule from going idle on a public repo), then deploys `output/` to
-GitHub Pages (repo setting: Pages source = GitHub Actions). Run it by hand from the Actions tab ("Run workflow").
+On the FrightWorks web VM (set up from the `frightworks-infra` repo): a systemd timer runs `dashboard.py` every
+5 minutes with `--cache` and `--prune`, the snapshots in `/var/lib/frightworks-stats/data` and `stats.json` in
+`/srv/stats`, which nginx serves as https://frightworks.dev/stats.json. That's one GitHub API request per run, at most
+12 an hour, many of them free 304s. A new no100f release shows up on the stats page within about 5 minutes.
 
-`.github/workflows/release-watch.yml` runs every 30 minutes (GitHub often starts scheduled runs late). If the newest
-FrightWorks-no100f release isn't in the published `stats.json` yet and no stats run is queued or running, it starts
-`stats.yml` (same repo, so the built-in token is enough). No100f releases are made by hand and that repo sends no
-dispatch, which is why this polls. The site checks every 30 minutes whether `stats.json` changed and rebuilds if so,
-so a new release reaches https://frightworks.dev/stats/ within about an hour, with no token in either direction.
+The snapshots live only on the VM since 2026-11-27. `data/` here holds the ones GitHub Actions collected before that
+(from 2026-11-12), which seeded the VM. The GitHub Actions workflows that collected them were retired at the same time.
+
+Changes to `dashboard.py` or `asset-types.json` reach the VM when they're installed again from `frightworks-infra`;
+it doesn't pull this repo by itself.
 
 ## Editing the file descriptions
 
